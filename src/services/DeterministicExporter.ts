@@ -7,6 +7,8 @@ export interface ExportOptions {
   beautyValues: BeautyValues;
   resolution: string; // e.g., '1080p', '4K'
   fps?: number;
+  sourceStart?: number;
+  sourceEnd?: number;
   onProgress: (progress: number) => void;
   onComplete: (downloadUrl: string, fileName: string) => void;
   onError: (err: any) => void;
@@ -14,22 +16,30 @@ export interface ExportOptions {
 }
 
 export class DeterministicExporter {
-  private static getDimensions(resolution: string): { width: number; height: number } {
+  private static getDimensions(resolution: string, isVertical: boolean): { width: number; height: number } {
+    let w = 1280;
+    let h = 720;
     switch (resolution) {
-      case '4K': return { width: 3840, height: 2160 };
-      case '1440p': return { width: 2560, height: 1440 };
-      case '1080p': return { width: 1920, height: 1080 };
+      case '4K': w = 3840; h = 2160; break;
+      case '1440p': w = 2560; h = 1440; break;
+      case '1080p': w = 1920; h = 1080; break;
       case '720p': 
-      default: return { width: 1280, height: 720 };
+      default: w = 1280; h = 720; break;
     }
+    return isVertical ? { width: h, height: w } : { width: w, height: h };
   }
 
   static async exportVideo(options: ExportOptions): Promise<void> {
-    const { videoElement, beautyValues, resolution, fps = 30, onProgress, onComplete, onError, projectName = 'Processed_Video' } = options;
+    const { videoElement, beautyValues, resolution, fps = 30, sourceStart = 0, sourceEnd, onProgress, onComplete, onError, projectName = 'Processed_Video' } = options;
 
     try {
-      const { width, height } = this.getDimensions(resolution);
-      const totalFrames = Math.floor((videoElement.duration || 0) * fps);
+      const isVertical = videoElement.videoHeight > videoElement.videoWidth;
+      const { width, height } = this.getDimensions(resolution, isVertical);
+      
+      const startSec = sourceStart;
+      const endSec = sourceEnd ?? videoElement.duration;
+      const duration = endSec - startSec;
+      const totalFrames = Math.floor(duration * fps);
 
       if (totalFrames <= 0) {
         throw new Error('Video duration is invalid or 0.');
@@ -53,8 +63,20 @@ export class DeterministicExporter {
         throw new Error('Failed to get 2D context for exporter canvas.');
       }
 
+      // Fetch and decode audio
+      let audioBuffer: AudioBuffer | null = null;
+      try {
+        const response = await fetch(videoElement.src);
+        const arrayBuffer = await response.arrayBuffer();
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const audioCtx = new AudioContextClass({ sampleRate: 44100 });
+        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      } catch (e) {
+        console.warn("Could not decode audio, exporting silent video:", e);
+      }
+
       // Initialize MP4 Muxer
-      const muxer = new Muxer({
+      const muxerOptions: any = {
         target: new ArrayBufferTarget(),
         video: {
           codec: 'avc',
@@ -62,7 +84,17 @@ export class DeterministicExporter {
           height: height
         },
         fastStart: 'in-memory'
-      });
+      };
+
+      if (audioBuffer) {
+        muxerOptions.audio = {
+          codec: 'aac',
+          numberOfChannels: audioBuffer.numberOfChannels,
+          sampleRate: audioBuffer.sampleRate
+        };
+      }
+
+      const muxer = new Muxer(muxerOptions);
 
       // Initialize VideoEncoder
       const encoder = new VideoEncoder({
@@ -86,6 +118,49 @@ export class DeterministicExporter {
         framerate: fps,
         hardwareAcceleration: 'prefer-hardware'
       });
+
+      // Configure Audio Encoder
+      let audioEncoder: AudioEncoder | null = null;
+      if (audioBuffer && (window as any).AudioEncoder) {
+        audioEncoder = new (window as any).AudioEncoder({
+          output: (chunk: any, metadata: any) => muxer.addAudioChunk(chunk, metadata),
+          error: (e: any) => console.error("Audio Encoding error:", e)
+        });
+        audioEncoder.configure({
+          codec: 'mp4a.40.2',
+          numberOfChannels: audioBuffer.numberOfChannels,
+          sampleRate: audioBuffer.sampleRate,
+          bitrate: 128000
+        });
+
+        // Encode audio upfront
+        const sampleRate = audioBuffer.sampleRate;
+        const startSample = Math.floor(startSec * sampleRate);
+        const endSample = Math.floor(endSec * sampleRate);
+        const numSamples = endSample - startSample;
+        const chunkSize = 1024;
+        
+        for (let i = 0; i < numSamples; i += chunkSize) {
+          const currentChunkSize = Math.min(chunkSize, numSamples - i);
+          const planarData = new Float32Array(currentChunkSize * audioBuffer.numberOfChannels);
+          for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+            const channelData = audioBuffer.getChannelData(c);
+            planarData.set(channelData.subarray(startSample + i, startSample + i + currentChunkSize), c * currentChunkSize);
+          }
+          
+          const audioData = new (window as any).AudioData({
+            format: 'f32-planar',
+            sampleRate: sampleRate,
+            numberOfFrames: currentChunkSize,
+            numberOfChannels: audioBuffer.numberOfChannels,
+            timestamp: (i / sampleRate) * 1_000_000,
+            data: planarData
+          });
+          
+          audioEncoder.encode(audioData);
+          audioData.close();
+        }
+      }
 
       const frameDurationInMicroseconds = 1_000_000 / fps;
 
@@ -114,7 +189,7 @@ export class DeterministicExporter {
         }
 
         // Seek to frame safely
-        await seekToFrame(videoElement, i / fps);
+        await seekToFrame(videoElement, startSec + (i / fps));
 
         // Run AI processing
         const aiResult = await faceMeshEngine.processFrame(videoElement, performance.now());
@@ -159,6 +234,9 @@ export class DeterministicExporter {
 
       // Flush and finalize
       await encoder.flush();
+      if (audioEncoder) {
+        await audioEncoder.flush();
+      }
       muxer.finalize();
 
       const { buffer } = muxer.target as ArrayBufferTarget;

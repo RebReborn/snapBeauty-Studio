@@ -774,12 +774,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       video.pause();
 
+      const clip = timelineClips[0];
+      const sourceStart = clip ? clip.sourceStart : 0;
+      const sourceEnd = clip ? clip.sourceEnd : video.duration;
+
       DeterministicExporter.exportVideo({
         videoElement: video,
         beautyValues: beautyValues,
         resolution: resolution,
         projectName: projectName,
         fps: 30, // Locked to 30fps for stable quality
+        sourceStart,
+        sourceEnd,
         onProgress: (pct) => {
           setExportQueue(prev =>
             prev.map(item => item.id === newExport.id ? { ...item, progress: Math.floor(pct) } : item)

@@ -66,52 +66,59 @@ const AuthScreen: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen flex items-center justify-center p-4 overflow-hidden relative font-sans">
-      {/* Dynamic Glow Circles */}
-      <div className="absolute w-[400px] h-[400px] rounded-full bg-purple-500/10 blur-[100px] top-1/4 left-1/4 animate-pulse-glow" />
-      <div className="absolute w-[350px] h-[350px] rounded-full bg-pink-500/10 blur-[100px] bottom-1/4 right-1/4 animate-pulse-glow" style={{ animationDelay: '1s' }} />
-
-      <div className="w-full max-w-5xl h-[580px] grid grid-cols-1 md:grid-cols-12 rounded-3xl overflow-hidden glass-panel shadow-2xl relative z-10 animate-slide-up">
+    <div className="h-screen w-screen bg-studio-dark flex items-center justify-center p-4 overflow-hidden font-sans">
+      <div className="w-full max-w-4xl h-auto min-h-[580px] max-h-[95vh] grid grid-cols-1 md:grid-cols-12 rounded-2xl overflow-hidden shadow-2xl border border-white/5 bg-studio-darker animate-slide-up">
         {/* Left Side: Brand Promo / Visuals */}
-        <div className="hidden md:flex md:col-span-5 bg-gradient-to-br from-purple-900/40 via-purple-950/60 to-studio-darker relative flex-col justify-between p-8 border-r border-white/5">
-          <div className="flex items-center gap-2">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-              <Camera className="text-white h-5.5 w-5.5" />
+        <div className="hidden md:flex md:col-span-5 bg-studio-dark relative flex-col justify-between p-10 border-r border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded bg-white flex items-center justify-center">
+              <Camera className="text-black h-4 w-4" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-purple-300 to-pink-200 bg-clip-text text-transparent">SnapBeauty</span>
+            <span className="text-lg font-bold text-white tracking-wide">SnapBeauty Studio</span>
           </div>
 
           <div className="my-auto space-y-6">
-            <h1 className="text-3xl font-extrabold text-white leading-tight">
-              Unleash the Power of <br />
-              <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">AI Beauty Filters</span>
+            <h1 className="text-3xl font-bold text-white leading-tight tracking-tight">
+              Professional <br /> Video Retouching
             </h1>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Enhance videos in real-time, adjust facial symmetry, polish skin tones, and whitening smiles instantly. SnapBeauty Studio brings professional studio-quality filters to desktop video editing.
+              Enhance videos in real-time. Adjust facial symmetry, polish skin tones, and color grade clips instantly. A minimal, focused environment for creators.
             </p>
-            <div className="space-y-3 pt-2">
+            <div className="space-y-4 pt-4">
               <div className="flex items-center gap-3 text-xs text-gray-300">
-                <div className="h-5 w-5 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">✓</div>
-                <span>Real-time GPU Face Mesh Tracking</span>
+                <div className="h-1 w-1 rounded-full bg-gray-500" />
+                <span>Real-time Video Processing</span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-300">
-                <div className="h-5 w-5 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">✓</div>
-                <span>One-click AI Auto-Beautification</span>
+                <div className="h-1 w-1 rounded-full bg-gray-500" />
+                <span>Advanced Color Grading</span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-300">
-                <div className="h-5 w-5 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">✓</div>
-                <span>Community Preset Lens Marketplace</span>
+                <div className="h-1 w-1 rounded-full bg-gray-500" />
+                <span>Deterministic MP4 Export</span>
+              </div>
+            </div>
+
+            <div className="mt-8 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+              <div className="flex items-start gap-3">
+                <span className="text-xl leading-none">💡</span>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-purple-300">Important Note</p>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    For the best tracking precision, use videos featuring a <strong>single, well-lit subject</strong> facing the camera. Extreme angles or multiple faces may degrade performance.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="text-[11px] text-gray-500">
-            Powered by MediaPipe & GFPGAN • Version 1.0.0
+          <div className="text-[11px] text-gray-500 font-mono">
+            Version 1.0.0
           </div>
         </div>
 
         {/* Right Side: Auth Forms */}
-        <div className="col-span-12 md:col-span-7 flex flex-col justify-center p-8 md:p-12 bg-studio-dark/40">
+        <div className="col-span-12 md:col-span-7 flex flex-col justify-center p-8 md:p-12 bg-studio-darker overflow-y-auto">
           <div className="w-full max-w-md mx-auto space-y-6">
             <div className="space-y-2 text-center md:text-left">
               {mode === 'login' && (
@@ -135,7 +142,7 @@ const AuthScreen: React.FC = () => {
             </div>
 
             {message && (
-              <div className="p-3 text-xs rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-center">
+              <div className="p-3 text-xs rounded border border-red-500/20 text-red-400 text-center bg-red-500/5">
                 {message}
               </div>
             )}
@@ -145,9 +152,9 @@ const AuthScreen: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
-                  className="w-full py-2.5 rounded-xl bg-white text-black font-semibold text-sm flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all"
+                  className="w-full py-2.5 rounded bg-white text-black font-semibold text-sm flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
                 >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
@@ -156,8 +163,8 @@ const AuthScreen: React.FC = () => {
                   <span>Continue with Google</span>
                 </button>
                 <div className="relative flex items-center justify-center pt-2">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-700/50"></div></div>
-                  <span className="relative px-2 bg-studio-dark/40 text-xs text-gray-500 uppercase tracking-widest font-medium">Or continue with email</span>
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
+                  <span className="relative px-2 bg-studio-darker text-[10px] text-gray-500 uppercase tracking-widest font-medium">Or continue with email</span>
                 </div>
               </div>
             )}
@@ -167,13 +174,13 @@ const AuthScreen: React.FC = () => {
                 <div className="space-y-1">
                   <label className="text-xs text-gray-400 font-medium">Display Name</label>
                   <div className="relative">
-                    <UserPlus className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                     <input
                       type="text"
                       placeholder="Jane Doe"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl glass-input text-sm text-white placeholder-gray-500"
+                      className="w-full bg-studio-dark border border-white/10 rounded px-10 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 transition-colors"
                     />
                   </div>
                 </div>
@@ -182,13 +189,13 @@ const AuthScreen: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-xs text-gray-400 font-medium">Email Address</label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                   <input
                     type="email"
                     placeholder="name@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl glass-input text-sm text-white placeholder-gray-500"
+                    className="w-full bg-studio-dark border border-white/10 rounded px-10 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 transition-colors"
                     required
                   />
                 </div>
@@ -202,38 +209,35 @@ const AuthScreen: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => { setMode('forgot'); setMessage(''); }}
-                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                        className="text-[10px] text-gray-500 hover:text-white transition-colors"
                       >
                         Forgot?
                       </button>
                     )}
                   </div>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                     <input
                       type="password"
-                      placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl glass-input text-sm text-white placeholder-gray-500"
-                      required
+                      className="w-full bg-studio-dark border border-white/10 rounded px-10 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 transition-colors"
+                      placeholder="••••••••"
                     />
                   </div>
                 </div>
               )}
-
               {mode === 'register' && (
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-400 font-medium">Confirm Password</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-400">Confirm Password</label>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                     <input
                       type="password"
-                      placeholder="••••••••"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl glass-input text-sm text-white placeholder-gray-500"
-                      required
+                      className="w-full bg-studio-dark border border-white/10 rounded px-10 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 transition-colors"
+                      placeholder="••••••••"
                     />
                   </div>
                 </div>
@@ -241,7 +245,7 @@ const AuthScreen: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 active:scale-[0.98] transition-all"
+                className="w-full py-2.5 rounded bg-white text-black font-semibold text-sm flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors mt-6"
               >
                 <span>
                   {mode === 'login' && 'Sign In'}

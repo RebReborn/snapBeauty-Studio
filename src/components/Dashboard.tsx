@@ -113,10 +113,10 @@ const Dashboard: React.FC = () => {
       {/* Top Header Bar */}
       <header className="h-16 border-b border-white/5 bg-studio-dark/85 backdrop-blur-md px-6 flex items-center justify-between z-20">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-            <Camera className="text-white h-5 w-5" />
+          <div className="h-8 w-8 rounded bg-white flex items-center justify-center">
+            <Camera className="text-black h-4 w-4" />
           </div>
-          <span className="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SnapBeauty Studio</span>
+          <span className="text-lg font-bold text-white tracking-wide">SnapBeauty Studio</span>
         </div>
 
         <div className="flex items-center gap-4">
@@ -157,9 +157,9 @@ const Dashboard: React.FC = () => {
         <section className="col-span-12 lg:col-span-7 space-y-8">
           
           {/* Create Project / File Dropzone */}
-          <div className="glass-panel p-6 rounded-2xl space-y-6">
+          <div className="bg-studio-dark border border-white/5 p-6 rounded-xl space-y-6">
             <div className="flex items-center gap-2.5">
-              <FolderPlus className="h-5 w-5 text-purple-400" />
+              <FolderPlus className="h-5 w-5 text-gray-400" />
               <h2 className="text-lg font-bold text-white">Create New Project</h2>
             </div>
 
@@ -184,8 +184,7 @@ const Dashboard: React.FC = () => {
                   accept="video/*"
                   className="hidden"
                 />
-                
-                <div className="h-12 w-12 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400 mb-4 shadow-inner">
+                <div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center text-gray-400 mb-4 shadow-inner">
                   <Upload className="h-5 w-5" />
                 </div>
                 <p className="text-sm font-semibold text-white">Drag & drop video clip</p>
@@ -202,14 +201,14 @@ const Dashboard: React.FC = () => {
                       placeholder="e.g. Beauty Vlog Vlog"
                       value={newProjName}
                       onChange={(e) => setNewProjName(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl glass-input text-xs text-white placeholder-gray-500"
+                      className="w-full bg-studio-darker border border-white/10 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                     />
                   </div>
 
                   {importedVideo && (
                     <div className="p-3 rounded-lg bg-white/3 border border-white/5 space-y-2">
                       <div className="flex items-center gap-2 text-xs text-white font-semibold truncate">
-                        <Video className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                        <Video className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                         <span>{importedVideo.name}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-[10px] text-gray-400">
@@ -225,9 +224,9 @@ const Dashboard: React.FC = () => {
                 <button
                   onClick={handleCreateProject}
                   disabled={!importedVideo}
-                  className={`w-full py-2.5 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all ${
+                  className={`w-full py-2.5 rounded text-black font-semibold text-xs flex items-center justify-center gap-2 transition-all ${
                     importedVideo 
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-purple-500/10 cursor-pointer active:scale-[0.98]' 
+                      ? 'bg-white hover:bg-gray-200 cursor-pointer' 
                       : 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/5'
                   }`}
                 >
@@ -239,13 +238,13 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Quick Presets / Template Library */}
-          <div className="glass-panel p-6 rounded-2xl space-y-4">
+          <div className="bg-studio-dark border border-white/5 p-6 rounded-xl space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <Sparkles className="h-5 w-5 text-purple-400" />
+                <Sparkles className="h-5 w-5 text-gray-400" />
                 <h2 className="text-lg font-bold text-white font-sans">Quick Start Beauty Presets</h2>
               </div>
-              <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/20 font-bold uppercase tracking-wider">Templates</span>
+              <span className="text-[10px] bg-white/5 text-gray-400 px-2 py-0.5 rounded border border-white/10 font-bold uppercase tracking-wider">Templates</span>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

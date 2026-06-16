@@ -217,6 +217,11 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillStyle = 'rgba(192,132,252,0.4)';
   ctx.font      = '11px system-ui';
   ctx.fillText('MP4  •  MOV  •  AVI  •  MKV  •  WEBM', w / 2, h / 2 + 43);
+
+  // Pro Tip
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font      = '10px system-ui';
+  ctx.fillText('💡 Tip: Works best with a single, well-lit subject in frame', w / 2, h / 2 + 70);
 }
 
 // ─── Visualizer Component ─────────────────────────────────────────────────────
@@ -258,6 +263,7 @@ const Visualizer: React.FC = () => {
   // ── State (UI re-renders) ─────────────────────────────────────────────────
   const [showMesh,       setShowMesh]       = useState(true);
   const [showBox,        setShowBox]        = useState(true);
+  const [showCompare,    setShowCompare]    = useState(false);
   const [previewQuality, setPreviewQuality] = useState<'low' | 'med' | 'high'>('high');
   const [fps,            setFps]            = useState(0);
   const [split,          setSplit]          = useState(0.5);
@@ -274,10 +280,12 @@ const Visualizer: React.FC = () => {
   const [loadPct,        setLoadPct]       = useState(0);
 
   // Keep refs in sync with state/props
+  const showCompareRef = useRef(false);
   useEffect(() => { beautyRef.current   = beautyValues; }, [beautyValues]);
   useEffect(() => { splitRef.current    = split;        }, [split]);
   useEffect(() => { showMeshRef.current = showMesh;     }, [showMesh]);
   useEffect(() => { showBoxRef.current  = showBox;      }, [showBox]);
+  useEffect(() => { showCompareRef.current = showCompare; }, [showCompare]);
   useEffect(() => { isExportingRef.current = isExporting; }, [isExporting]);
 
   // ── Init MediaPipe face mesh engine ──────────────────────────────────────────
@@ -337,7 +345,7 @@ const Visualizer: React.FC = () => {
             return;
           }
 
-          const sx          = isExp ? 0 : w * splitRef.current;
+          const sx          = isExp || !showCompareRef.current ? 0 : w * splitRef.current;
           const bv          = beautyRef.current;
           const landmarks   = landmarksRef.current;
           const faceBox     = faceBoxRef.current;
@@ -673,15 +681,28 @@ const Visualizer: React.FC = () => {
             <span>Mesh</span>
           </button>
           <button
-            onClick={() => { setShowBox(v => { const n = !v; showBoxRef.current = n; return n; }); }}
-            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors flex items-center gap-1 ${
+            onClick={() => setShowBox(!showBox)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-mono font-bold transition-all ${
               showBox
-                ? 'bg-pink-500/20 border-pink-500/40 text-pink-300'
+                ? 'bg-purple-500/10 border-purple-500/40 text-purple-300'
                 : 'bg-black/60 border-white/5 text-gray-500'
             }`}
           >
             <Film className="h-3 w-3" />
             <span>Face Box</span>
+          </button>
+          
+          {/* Split Compare */}
+          <button
+            onClick={() => setShowCompare(!showCompare)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-mono font-bold transition-all ${
+              showCompare
+                ? 'bg-purple-500/10 border-purple-500/40 text-purple-300'
+                : 'bg-black/60 border-white/5 text-gray-500'
+            }`}
+          >
+            {showCompare ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            <span>Compare</span>
           </button>
         </div>
       </div>
@@ -695,11 +716,13 @@ const Visualizer: React.FC = () => {
           className="rounded-xl border border-white/10 shadow-2xl shadow-black/60 max-w-full max-h-full object-contain"
         />
         {/* Split drag zone */}
-        <div
-          onMouseDown={() => setDraggingSplit(true)}
-          className="absolute inset-y-2 w-9 z-20"
-          style={{ left: `calc(${split * 100}% - 18px)`, cursor: 'ew-resize' }}
-        />
+        {showCompare && (
+          <div
+            onMouseDown={() => setDraggingSplit(true)}
+            className="absolute inset-y-2 w-9 z-20"
+            style={{ left: `calc(${split * 100}% - 18px)`, cursor: 'ew-resize' }}
+          />
+        )}
       </div>
 
       {/* ── Transport controls ── */}
