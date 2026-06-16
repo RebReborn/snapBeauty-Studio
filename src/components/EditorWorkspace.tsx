@@ -6,7 +6,8 @@ import Timeline from './Timeline';
 import Marketplace from './Marketplace';
 import { 
   ArrowLeft, Undo2, Redo2, Sparkles, Download, 
-  Video, Folder, ShoppingBag, Palette 
+  Video, Folder, ShoppingBag, Palette,
+  Loader2, CheckCircle, XCircle
 } from 'lucide-react';
 
 const EditorWorkspace: React.FC = () => {
@@ -20,7 +21,8 @@ const EditorWorkspace: React.FC = () => {
     isAutoBeautifyActive, 
     toggleAutoBeautify, 
     setShowExportModal,
-    user
+    user,
+    exportQueue
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'media' | 'presets' | 'marketplace' | 'color'>('color');
@@ -203,6 +205,54 @@ const EditorWorkspace: React.FC = () => {
         </aside>
 
       </div>
+
+      {/* Export Queue Floating Panel */}
+      {exportQueue.length > 0 && (
+        <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3 w-72 pointer-events-none">
+          {exportQueue.map(item => (
+            <div key={item.id} className="bg-studio-dark border border-white/10 rounded-xl p-3 shadow-2xl backdrop-blur-xl pointer-events-auto animate-fade-in slide-in-from-right-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-white truncate pr-2">{item.projectName}</span>
+                {item.status === 'processing' && <Loader2 className="h-3.5 w-3.5 text-purple-400 animate-spin" />}
+                {item.status === 'completed' && <CheckCircle className="h-3.5 w-3.5 text-green-400" />}
+                {item.status === 'failed' && <XCircle className="h-3.5 w-3.5 text-red-400" />}
+              </div>
+              
+              {item.status === 'processing' && (
+                <>
+                  <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mb-1.5">
+                    <div 
+                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300 ease-out"
+                      style={{ width: `${item.progress}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] font-medium text-gray-400">
+                    <span>Encoding {item.resolution}</span>
+                    <span className="font-mono text-white">{item.progress}%</span>
+                  </div>
+                </>
+              )}
+
+              {item.status === 'completed' && item.downloadUrl && (
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-[10px] text-green-400 font-medium">Export Complete!</span>
+                  <a 
+                    href={item.downloadUrl}
+                    download={`${item.projectName.replace(/\s+/g, '_')}_${item.resolution}.mp4`}
+                    className="px-2.5 py-1 bg-green-500/20 text-green-300 hover:bg-green-500/30 rounded border border-green-500/20 text-[10px] font-bold transition-all hover:scale-105 active:scale-95"
+                  >
+                    Save File
+                  </a>
+                </div>
+              )}
+
+              {item.status === 'failed' && (
+                <span className="text-[10px] text-red-400 font-medium block mt-1">Export failed. Please try again.</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp, VideoMetadata } from '../context/AppContext';
 import { Camera, FolderPlus, Upload, Shield, LogOut, Video, Trash2, Clock, Sparkles, ShoppingBag, Eye } from 'lucide-react';
+import LegalModal from './LegalModal';
 
 const Dashboard: React.FC = () => {
   const { 
@@ -19,6 +20,10 @@ const Dashboard: React.FC = () => {
   const [importedVideo, setImportedVideo] = useState<VideoMetadata | null>(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Legal Modal
+  const [legalOpen, setLegalOpen] = useState(false);
+  const [legalTab, setLegalTab] = useState<'terms' | 'privacy' | 'aup'>('terms');
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -372,6 +377,20 @@ const Dashboard: React.FC = () => {
         </section>
 
       </main>
+
+      {/* Footer Links */}
+      <footer className="h-10 border-t border-white/5 bg-studio-darker flex items-center justify-center gap-6 text-[10px] text-gray-500 z-10 relative">
+        <button onClick={() => { setLegalTab('terms'); setLegalOpen(true); }} className="hover:text-gray-300 transition-colors">Terms of Service</button>
+        <button onClick={() => { setLegalTab('privacy'); setLegalOpen(true); }} className="hover:text-gray-300 transition-colors">Privacy Policy</button>
+        <button onClick={() => { setLegalTab('aup'); setLegalOpen(true); }} className="hover:text-gray-300 transition-colors">Acceptable Use</button>
+        <span className="opacity-50">© 2026 SnapBeauty Studio</span>
+      </footer>
+
+      <LegalModal 
+        isOpen={legalOpen} 
+        onClose={() => setLegalOpen(false)} 
+        initialTab={legalTab} 
+      />
 
     </div>
   );

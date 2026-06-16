@@ -1,9 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { auth, db } from '../lib/firebase';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
+import { DeterministicExporter } from '../services/DeterministicExporter';
 
 // Interfaces
 export interface User {
-  email: string;
-  isPro: boolean;
+  uid: string;
+  email: string | null;
+  displayName: string | null;
 }
 
 export interface VideoMetadata {
@@ -96,6 +101,17 @@ export interface BeautyValues {
   faceSaturation: number;
   faceContrast: number;
   faceBrightness: number;
+  
+  // G7X Camera Look
+  g7xFlashIntensity: number; // 0 to 100
+  g7xSubjectContrast: number; // 0 to 100
+  g7xSubjectShadows: number; // -100 to 100
+  g7xSubjectHighlights: number; // -100 to 100
+  g7xBackgroundDim: number; // 0 to 100
+  g7xColorShift: number; // 0 to 100
+  g7xHighlightBloom: number; // 0 to 100
+  g7xCoolShadows: number; // 0 to 100
+  g7xGrainAmount: number; // 0 to 100
 }
 
 export interface TimelineClip {
@@ -156,6 +172,10 @@ interface AppContextType {
   deleteProject: (projectId: string) => void;
   updateBeautyValue: (key: keyof BeautyValues, value: any) => void;
   applyPreset: (presetName: string) => void;
+  savePreset: (presetName: string) => void;
+  deletePreset: (presetName: string) => void;
+  publishPresetToMarketplace: (presetName: string) => void;
+  customPresets: Record<string, BeautyValues>;
   toggleAutoBeautify: () => void;
   splitClip: () => void;
   trimClip: (clipId: string, side: 'start' | 'end', delta: number) => void;
@@ -233,6 +253,15 @@ const defaultBeautyValues: BeautyValues = {
   faceSaturation: 0,
   faceContrast: 0,
   faceBrightness: 0,
+  g7xFlashIntensity: 0,
+  g7xSubjectContrast: 0,
+  g7xSubjectShadows: 0,
+  g7xSubjectHighlights: 0,
+  g7xBackgroundDim: 0,
+  g7xColorShift: 0,
+  g7xHighlightBloom: 0,
+  g7xCoolShadows: 0,
+  g7xGrainAmount: 0,
 };
 
 const presets: Record<string, Partial<BeautyValues>> = {
@@ -345,28 +374,20 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Authentication States
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('snapbeauty_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [currentView, setView] = useState<'auth' | 'dashboard' | 'editor' | 'marketplace'>('auth');
+  const [user, setUser] = useState<User | null>(null);
+  const [currentView, setCurrentView] = useState<'auth' | 'dashboard' | 'editor' | 'marketplace'>('auth');
 
   // Projects State
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('snapbeauty_projects');
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: 'p1', name: 'Summer Influencer Vlog', updatedAt: '2 hours ago', video: { name: 'vlog_clip.mp4', resolution: '1080p', fps: 30, duration: 42, size: '84 MB', url: '' } },
-      { id: 'p2', name: 'Fashion Model Shoot', updatedAt: 'Yesterday', video: { name: 'fashion_model.mov', resolution: '4K', fps: 60, duration: 15, size: '240 MB', url: '' } },
-      { id: 'p3', name: 'TikTok Dance Tutorial', updatedAt: '3 days ago', video: { name: 'dance_tut.webm', resolution: '1080p', fps: 30, duration: 60, size: '92 MB', url: '' } },
-    ];
-  });
+  const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
 
   // Beauty Settings State
   const [beautyValues, setBeautyValues] = useState<BeautyValues>(defaultBeautyValues);
   const [isAutoBeautifyActive, setIsAutoBeautifyActive] = useState<boolean>(false);
   const [activePreset, setActivePreset] = useState<string>('None');
+
+  // Custom Presets State
+  const [customPresets, setCustomPresets] = useState<Record<string, BeautyValues>>({});
 
   // Timeline States
   const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
@@ -386,33 +407,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Marketplace Lenses
   const [marketplaceLenses, setMarketplaceLenses] = useState<Lens[]>(initialLenses);
 
-  // Export refs — registered by Visualizer so ExportModal can access canvas + video
+  // Export State
   const [isExporting, setIsExporting] = useState(false);
   const [exportResolution, setExportResolution] = useState('720p');
   const exportCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const exportVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Persistent User and Project sync
+  // Auth & Firestore Listener
   useEffect(() => {
-    if (user) {
-      localStorage.setItem('snapbeauty_user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('snapbeauty_user');
-    }
-  }, [user]);
+    return onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({ uid: firebaseUser.uid, email: firebaseUser.email, displayName: firebaseUser.displayName });
+        setCurrentView('dashboard');
+        
+        // Sync presets from Firestore
+        const docRef = doc(db, 'users', firebaseUser.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().customPresets) {
+          setCustomPresets(docSnap.data().customPresets);
+        }
+      } else {
+        setUser(null);
+        setCurrentView('auth');
+        setCustomPresets({});
+      }
+    });
+  }, []);
 
+  // Global Marketplace Listener
   useEffect(() => {
-    localStorage.setItem('snapbeauty_projects', JSON.stringify(projects));
-  }, [projects]);
-
-  // Set default view on load
-  useEffect(() => {
-    if (user) {
-      setView('dashboard');
-    } else {
-      setView('auth');
-    }
-  }, [user]);
+    const q = collection(db, 'lenses');
+    return onSnapshot(q, (snapshot) => {
+      const lenses: Lens[] = [];
+      snapshot.forEach((doc) => {
+        lenses.push({ id: doc.id, ...doc.data() } as Lens);
+      });
+      // Merge with initialLenses if firestore is empty, otherwise use firestore
+      if (lenses.length > 0) {
+        setMarketplaceLenses(lenses);
+      }
+    }, (error) => {
+      console.error("Failed to load marketplace lenses", error);
+    });
+  }, []);
 
   // Initialize history when active project changes
   useEffect(() => {
@@ -440,7 +477,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const pushToHistory = (newBeauty: BeautyValues, newClips: TimelineClip[]) => {
     const updatedHistory = history.slice(0, historyIndex + 1);
     updatedHistory.push({ beauty: { ...newBeauty }, clips: [...newClips] });
-    // Limit history stack size to 50
     if (updatedHistory.length > 50) {
       updatedHistory.shift();
       setHistoryIndex(updatedHistory.length - 1);
@@ -450,28 +486,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setHistory(updatedHistory);
   };
 
-  // Auth Operations
-  const login = (email: string) => {
-    setUser({ email, isPro: false });
-    setView('dashboard');
-  };
-
-  const logout = () => {
-    setUser(null);
-    setActiveProject(null);
-    setView('auth');
-  };
-
-  const register = (email: string) => {
-    setUser({ email, isPro: false });
-    setView('dashboard');
-  };
-
-  const upgradeToPro = () => {
-    if (user) {
-      setUser({ ...user, isPro: true });
-    }
-  };
+  // Authentication Operations
+  const login = (email: string) => { /* Logic integrated via Firebase */ };
+  const register = (email: string) => { /* Logic integrated via Firebase */ };
+  const logout = () => { signOut(auth); };
+  const upgradeToPro = () => { if (user) setUser({ ...user, isPro: true }); };
 
   // Project Operations
   const createProject = (name: string, video: VideoMetadata | null) => {
@@ -483,7 +502,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setProjects([newProject, ...projects]);
     setActiveProject(newProject);
-    setView('editor');
+    setCurrentView('editor');
     return newProject;
   };
 
@@ -491,7 +510,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const proj = projects.find(p => p.id === projectId);
     if (proj) {
       setActiveProject(proj);
-      setView('editor');
+      setCurrentView('editor');
     }
   };
 
@@ -519,13 +538,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setBeautyValues(defaultBeautyValues);
       pushToHistory(defaultBeautyValues, timelineClips);
     } else {
-      const presetData = presets[presetName];
+      const presetData = presets[presetName] || customPresets[presetName];
       if (presetData) {
         const newValues = { ...defaultBeautyValues, ...presetData };
         setBeautyValues(newValues);
         pushToHistory(newValues, timelineClips);
       }
     }
+  };
+
+  const savePreset = async (presetName: string) => {
+    const newPresets = { ...customPresets, [presetName]: { ...beautyValues } };
+    setCustomPresets(newPresets);
+    if (user) {
+      await setDoc(doc(db, 'users', user.uid), { customPresets: newPresets }, { merge: true });
+    }
+  };
+
+  const deletePreset = async (presetName: string) => {
+    const newPresets = { ...customPresets };
+    delete newPresets[presetName];
+    setCustomPresets(newPresets);
+    if (user) {
+      await setDoc(doc(db, 'users', user.uid), { customPresets: newPresets }, { merge: true });
+    }
+    if (activePreset === presetName) {
+      setActivePreset('None');
+    }
+  };
+
+  const publishPresetToMarketplace = async (presetName: string) => {
+    if (!user) return;
+    const presetValues = customPresets[presetName];
+    if (!presetValues) return;
+    
+    // Add to lenses collection
+    const newLens = {
+      name: presetName,
+      creator: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+      rating: 5.0,
+      reviewsCount: 1,
+      downloads: '0',
+      price: 'Free',
+      category: 'new',
+      imageUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80', // generic thumbnail
+      isDownloaded: false,
+      values: presetValues
+    };
+    
+    await setDoc(doc(collection(db, 'lenses')), newLens);
+    alert(`Successfully published "${presetName}" to the global marketplace!`);
   };
 
   // Auto Beautify AI Toggle
@@ -655,7 +717,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setExportQueue(prev => [newExport, ...prev]);
     setShowExportModal(false);
 
-    // Simulate Rendering
     let currentProgress = 0;
     const interval = setInterval(() => {
       setExportQueue(prev => 
@@ -681,14 +742,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  // Real export: captures canvas stream via MediaRecorder
+  // Real export: captures deterministic video using WebCodecs
   const startExportRecording = (resolution: string, format: string, bitrateLevel: string = 'high') => {
     if (!activeProject) return;
-    const canvas = exportCanvasRef.current;
     const video = exportVideoRef.current;
 
-    // Fallback to simulated if no real video is loaded
-    if (!canvas || !video || !video.src || !video.duration) {
+    if (!video || !video.src || !video.duration) {
       addToExportQueue(resolution, format);
       return;
     }
@@ -708,75 +767,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setExportQueue(prev => [newExport, ...prev]);
     setShowExportModal(false);
 
-    // Wait for Visualizer to resize canvas to target resolution
+    // Give state time to update so Visualizer can pause its RAF loop
     setTimeout(() => {
-      // Prioritize H264 for hardware encoding to prevent AI CPU starvation
-      let mimeType = 'video/webm';
-      if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
-        mimeType = 'video/webm;codecs=h264';
-      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
-        mimeType = 'video/webm;codecs=vp8';
-      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-        mimeType = 'video/webm;codecs=vp9';
-      }
-
-      // Map resolution and bitrate to bits per second
-      let bps = 8000000;
-      const isHigh = bitrateLevel === 'high';
-      if (resolution === '720p') bps = isHigh ? 10000000 : 5000000;
-      else if (resolution === '1080p') bps = isHigh ? 25000000 : 12000000;
-      else if (resolution === '1440p') bps = isHigh ? 40000000 : 25000000;
-      else if (resolution === '4K') bps = isHigh ? 80000000 : 40000000;
-
-      const stream = canvas.captureStream(30);
-      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: bps });
-      const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${projectName.replace(/\s+/g, '_')}_snapbeauty.webm`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, 1000);
-        setExportQueue(prev =>
-          prev.map(item => item.id === newExport.id ? { ...item, progress: 100, status: 'completed' } : item)
-        );
-      };
-
-      const duration = video.duration;
       const originalTime = video.currentTime;
-      video.currentTime = 0;
-      recorder.start(200);
-      video.play();
+      const originalPaused = video.paused;
+      
+      video.pause();
 
-      const progressInterval = setInterval(() => {
-        if (video.duration > 0) {
-          const pct = Math.min(99, Math.floor((video.currentTime / duration) * 100));
+      DeterministicExporter.exportVideo({
+        videoElement: video,
+        beautyValues: beautyValues,
+        resolution: resolution,
+        projectName: projectName,
+        fps: 30, // Locked to 30fps for stable quality
+        onProgress: (pct) => {
           setExportQueue(prev =>
-            prev.map(item => item.id === newExport.id ? { ...item, progress: pct } : item)
+            prev.map(item => item.id === newExport.id ? { ...item, progress: Math.floor(pct) } : item)
           );
-        }
-      }, 400);
-
-      const onEnded = () => {
-        setTimeout(() => {
-          recorder.stop();
+        },
+        onComplete: (downloadUrl, fileName) => {
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(downloadUrl);
+          }, 1000);
+          
+          setExportQueue(prev =>
+            prev.map(item => item.id === newExport.id ? { ...item, progress: 100, status: 'completed' } : item)
+          );
+          
+          // Cleanup video state
           setIsExporting(false);
-          clearInterval(progressInterval);
           video.currentTime = originalTime;
-        }, 300);
-      };
-      video.addEventListener('ended', onEnded, { once: true });
+          if (!originalPaused) video.play();
+        },
+        onError: (err) => {
+          setExportQueue(prev =>
+            prev.map(item => item.id === newExport.id ? { ...item, status: 'failed' } : item)
+          );
+          setIsExporting(false);
+          video.currentTime = originalTime;
+          if (!originalPaused) video.play();
+          alert('Export failed. Check console for details.');
+        }
+      });
     }, 100);
   };
 
@@ -800,16 +838,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       exportQueue,
       showExportModal,
       marketplaceLenses,
-      login,
       logout,
-      register,
-      upgradeToPro,
-      setView,
+      setView: setCurrentView,
       createProject,
       selectProject,
       deleteProject,
       updateBeautyValue,
       applyPreset,
+      savePreset,
+      deletePreset,
+      publishPresetToMarketplace,
+      customPresets,
       toggleAutoBeautify,
       splitClip,
       trimClip,

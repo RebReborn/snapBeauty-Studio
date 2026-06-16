@@ -90,10 +90,144 @@ const RIGHT_EYEBROW_INDICES = [300, 293, 334, 296, 336, 285, 295, 282, 283, 276]
 export class BeautyEngine {
   
   /**
+   * Draws the video onto the canvas with Global Color Grading filters applied.
+   * This is used by both the Visualizer and the Deterministic Exporter.
+   */
+  static drawVideoWithGlobalColorGrading(
+    ctx: CanvasRenderingContext2D,
+    video: HTMLVideoElement,
+    w: number,
+    h: number,
+    bv: BeautyValues
+  ) {
+    // Color Grading Base Filters
+    const exposure = 100 + (bv.cgExposure || 0);
+    const contrast = 100 + (bv.cgContrast || 0);
+    
+    // Vibrance is softer than saturation
+    const satBase = (bv.cgSaturation || 0);
+    const vibBase = (bv.cgVibrance || 0) * 0.5;
+    const saturate = Math.max(0, 100 + satBase + vibBase);
+
+    ctx.filter = `brightness(${exposure}%) contrast(${contrast}%) saturate(${saturate}%)`;
+    ctx.drawImage(video, 0, 0, w, h);
+    ctx.filter = 'none';
+
+    // Color Overlays (Temperature & Tint)
+    if (bv.cgTemperature || bv.cgTint) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'overlay';
+
+      if (bv.cgTemperature) {
+        const tempAlpha = Math.abs(bv.cgTemperature) * 0.003;
+        ctx.fillStyle = bv.cgTemperature > 0 ? `rgba(255, 140, 0, ${tempAlpha})` : `rgba(0, 102, 255, ${tempAlpha})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      if (bv.cgTint) {
+        const tintAlpha = Math.abs(bv.cgTint) * 0.003;
+        ctx.fillStyle = bv.cgTint > 0 ? `rgba(255, 0, 255, ${tintAlpha})` : `rgba(0, 255, 0, ${tintAlpha})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+      ctx.restore();
+    }
+
+    // Highlights & Shadows (Approximation via blend modes)
+    if (bv.cgHighlights || bv.cgShadows) {
+      ctx.save();
+      if (bv.cgHighlights > 0) {
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = bv.cgHighlights * 0.004;
+        ctx.drawImage(ctx.canvas, 0, 0); 
+      } else if (bv.cgHighlights < 0) {
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = Math.abs(bv.cgHighlights) * 0.002;
+        ctx.fillStyle = '#cccccc'; 
+        ctx.fillRect(0,0,w,h);
+      }
+
+      if (bv.cgShadows > 0) {
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = bv.cgShadows * 0.004;
+        ctx.fillStyle = '#444444'; 
+        ctx.fillRect(0,0,w,h);
+      } else if (bv.cgShadows < 0) {
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = Math.abs(bv.cgShadows) * 0.004;
+        ctx.drawImage(ctx.canvas, 0, 0); 
+      }
+      ctx.restore();
+    }
+
+    // Glow, Clarity, and Sharpening (Require Offscreen Canvas Blurs)
+    if (bv.cgGlow || bv.cgClarity || bv.cgSharpening) {
+      let tCanvas: HTMLCanvasElement | OffscreenCanvas;
+      if (typeof OffscreenCanvas !== 'undefined') {
+        tCanvas = new OffscreenCanvas(w, h);
+      } else {
+        tCanvas = document.createElement('canvas');
+        tCanvas.width = w; tCanvas.height = h;
+      }
+      const tCtx = tCanvas.getContext('2d') as CanvasRenderingContext2D;
+      
+      if (tCtx) {
+        if (bv.cgGlow > 0) {
+          tCtx.filter = 'blur(16px) brightness(150%)';
+          tCtx.drawImage(ctx.canvas, 0, 0);
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.globalAlpha = bv.cgGlow * 0.006;
+          ctx.drawImage(tCanvas, 0, 0);
+          ctx.restore();
+        }
+
+        if (bv.cgClarity > 0) {
+          tCtx.clearRect(0,0,w,h);
+          tCtx.filter = 'blur(20px) invert(100%) grayscale(100%) opacity(50%)';
+          tCtx.drawImage(ctx.canvas, 0, 0);
+          ctx.save();
+          ctx.globalCompositeOperation = 'overlay';
+          ctx.globalAlpha = bv.cgClarity * 0.005;
+          ctx.drawImage(tCanvas, 0, 0);
+          ctx.restore();
+        }
+
+        if (bv.cgSharpening > 0) {
+          tCtx.clearRect(0,0,w,h);
+          tCtx.filter = 'blur(1.5px) invert(100%) grayscale(100%) opacity(50%)';
+          tCtx.drawImage(ctx.canvas, 0, 0);
+          ctx.save();
+          ctx.globalCompositeOperation = 'overlay';
+          ctx.globalAlpha = bv.cgSharpening * 0.008;
+          ctx.drawImage(tCanvas, 0, 0);
+          ctx.restore();
+        }
+      }
+    }
+
+    // Vignette
+    if (bv.cgVignette > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = bv.cgVignette * 0.01;
+      const cx = w / 2;
+      const cy = h / 2;
+      const radius = Math.max(w, h) * 0.6;
+      const grad = ctx.createRadialGradient(cx, cy, radius * 0.3, cx, cy, radius);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+  }
+  
+  /**
    * Applies all beauty filter layers to the target canvas.
    */
   static apply(
     ctx: CanvasRenderingContext2D,
+    video: HTMLVideoElement,
     width: number,
     height: number,
     landmarks: Array<{ x: number; y: number; z: number }> | null,
@@ -110,7 +244,9 @@ export class BeautyEngine {
       y: lm.y * height
     }));
 
-    // Face Color Grading Layer
+
+
+  // Face Color Grading Layer
     this.applyFaceColorGrading(ctx, pts, beautyValues);
 
     // Order of operations:
@@ -139,6 +275,9 @@ export class BeautyEngine {
 
     // 6. Makeup (Lip color, gloss, cheek blush)
     this.applyMakeup(ctx, ptsUpdated, beautyValues);
+
+    // 7. G7X Camera Flash Look (Background dimming, grain, highlight boost)
+    this.applyG7XFlashLook(ctx, video, segmentationMask, maskWidth, maskHeight, beautyValues);
   }
 
   /**
@@ -952,6 +1091,236 @@ export class BeautyEngine {
     // Replace the skin pixels with the filtered canvas
     ctx.globalCompositeOperation = 'source-over';
     ctx.drawImage(tempCanvas, 0, 0);
+
+    ctx.restore();
+  }
+
+  /**
+   * Applies the G7X Camera Flash Aesthetic using the Segmentation Mask
+   */
+  static applyG7XFlashLook(
+    ctx: CanvasRenderingContext2D,
+    video: HTMLVideoElement,
+    maskData: Uint8ClampedArray | null,
+    maskW: number,
+    maskH: number,
+    bv: BeautyValues
+  ) {
+    if (bv.g7xFlashIntensity === 0 && bv.g7xBackgroundDim === 0 && bv.g7xColorShift === 0 && bv.g7xGrainAmount === 0) return;
+
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+
+    ctx.save();
+
+    // 1. Prepare the Mask Canvas
+    let maskCanvas: HTMLCanvasElement | null = null;
+    if (maskData && maskW > 0 && maskH > 0) {
+      maskCanvas = document.createElement('canvas');
+      maskCanvas.width = maskW;
+      maskCanvas.height = maskH;
+      const mCtx = maskCanvas.getContext('2d');
+      if (mCtx) {
+        // The maskData from ImageSegmenter is a categorical mask (e.g., 0 for bg, 1-14 for body parts)
+        // We convert it to a visible alpha mask
+        const imgData = mCtx.createImageData(maskW, maskH);
+        for (let i = 0; i < maskData.length; i++) {
+          const isForeground = maskData[i] > 0;
+          const idx = i * 4;
+          imgData.data[idx] = 255;     // R
+          imgData.data[idx+1] = 255;   // G
+          imgData.data[idx+2] = 255;   // B
+          imgData.data[idx+3] = isForeground ? 255 : 0; // A
+        }
+        mCtx.putImageData(imgData, 0, 0);
+      }
+    }
+
+    // 2. Background Dimming (Inverse-Square Law approximation)
+    if (bv.g7xBackgroundDim > 0) {
+      const bgTemp = document.createElement('canvas');
+      bgTemp.width = w;
+      bgTemp.height = h;
+      const bgCtx = bgTemp.getContext('2d');
+      if (bgCtx) {
+        bgCtx.fillStyle = 'black';
+        bgCtx.globalAlpha = bv.g7xBackgroundDim * 0.008; // max 80% darkness
+        bgCtx.fillRect(0, 0, w, h);
+        
+        // If we have a mask, we "erase" the black rectangle over the subject
+        if (maskCanvas) {
+          bgCtx.globalCompositeOperation = 'destination-out';
+          bgCtx.globalAlpha = 1.0;
+          bgCtx.drawImage(maskCanvas, 0, 0, w, h);
+        } else {
+          // Fallback Faux-Depth Radial Gradient if no AI mask
+          const cx = w / 2;
+          const cy = h / 2;
+          const r = Math.min(w, h) * 0.6;
+          const grad = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          grad.addColorStop(0, 'rgba(0,0,0,1)');
+          grad.addColorStop(1, 'rgba(0,0,0,0)');
+          bgCtx.globalCompositeOperation = 'destination-out';
+          bgCtx.fillStyle = grad;
+          bgCtx.fillRect(0, 0, w, h);
+        }
+        
+        // Draw the masked shadow onto the main canvas
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1.0;
+        ctx.drawImage(bgTemp, 0, 0);
+      }
+    }
+
+    // 3. Subject Specific Enhancements
+    const hasSubjectEdits = bv.g7xFlashIntensity > 0 || bv.g7xSubjectContrast > 0 || Math.abs(bv.g7xSubjectShadows || 0) > 0 || Math.abs(bv.g7xSubjectHighlights || 0) > 0;
+    
+    if (hasSubjectEdits) {
+      const subjTemp = document.createElement('canvas');
+      subjTemp.width = w;
+      subjTemp.height = h;
+      const sCtx = subjTemp.getContext('2d');
+      if (sCtx) {
+        // Draw video with contrast filter
+        if (bv.g7xSubjectContrast > 0) {
+          sCtx.filter = `contrast(${100 + bv.g7xSubjectContrast}%)`;
+        }
+        sCtx.drawImage(video, 0, 0, w, h);
+        sCtx.filter = 'none';
+        
+        // Boost flash brightness (overlay)
+        if (bv.g7xFlashIntensity > 0) {
+          sCtx.globalCompositeOperation = 'hard-light';
+          sCtx.fillStyle = `rgba(255, 240, 230, ${bv.g7xFlashIntensity * 0.006})`;
+          sCtx.fillRect(0, 0, w, h);
+        }
+
+        // Subject Shadows
+        if (bv.g7xSubjectShadows !== 0) {
+          if (bv.g7xSubjectShadows > 0) {
+            sCtx.globalCompositeOperation = 'screen';
+            sCtx.globalAlpha = bv.g7xSubjectShadows * 0.005; 
+            sCtx.fillStyle = '#444444';
+            sCtx.fillRect(0, 0, w, h);
+          } else {
+            sCtx.globalCompositeOperation = 'multiply';
+            sCtx.globalAlpha = Math.abs(bv.g7xSubjectShadows) * 0.005;
+            sCtx.drawImage(subjTemp, 0, 0); 
+          }
+        }
+        
+        sCtx.globalAlpha = 1.0;
+
+        // Subject Highlights
+        if (bv.g7xSubjectHighlights !== 0) {
+          if (bv.g7xSubjectHighlights > 0) {
+            sCtx.globalCompositeOperation = 'color-dodge'; 
+            sCtx.globalAlpha = bv.g7xSubjectHighlights * 0.003;
+            sCtx.drawImage(subjTemp, 0, 0);
+          } else {
+            sCtx.globalCompositeOperation = 'multiply';
+            sCtx.globalAlpha = Math.abs(bv.g7xSubjectHighlights) * 0.003;
+            sCtx.fillStyle = '#cccccc';
+            sCtx.fillRect(0, 0, w, h);
+          }
+        }
+        
+        sCtx.globalAlpha = 1.0;
+
+        // Mask it to subject only
+        if (maskCanvas) {
+          sCtx.globalCompositeOperation = 'destination-in';
+          sCtx.drawImage(maskCanvas, 0, 0, w, h);
+        }
+
+        // Blend onto main canvas
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(subjTemp, 0, 0);
+      }
+    }
+
+    // 4. G7X Color Matrix (Warm & Red shift)
+    if (bv.g7xColorShift > 0) {
+      const shiftAmt = bv.g7xColorShift * 0.01;
+      // G7X typically has warm (magenta/orange) highlights
+      ctx.globalCompositeOperation = 'soft-light';
+      ctx.fillStyle = `rgba(255, 140, 80, ${shiftAmt * 0.6})`; // Stronger warm shift
+      ctx.fillRect(0, 0, w, h);
+      
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.fillStyle = `rgba(255, 180, 180, ${shiftAmt * 0.2})`; // Magenta skin tone push
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // 5. Highlight Bloom (Soft glow over hotspots)
+    if (bv.g7xHighlightBloom > 0) {
+      // We need an offscreen canvas to blur the bright spots
+      let bCanvas: HTMLCanvasElement | OffscreenCanvas;
+      if (typeof OffscreenCanvas !== 'undefined') {
+        bCanvas = new OffscreenCanvas(w, h);
+      } else {
+        bCanvas = document.createElement('canvas');
+        bCanvas.width = w; bCanvas.height = h;
+      }
+      const bCtx = bCanvas.getContext('2d') as CanvasRenderingContext2D;
+      
+      if (bCtx) {
+        bCtx.filter = 'blur(12px) brightness(120%) contrast(150%)';
+        bCtx.drawImage(ctx.canvas, 0, 0);
+        
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = bv.g7xHighlightBloom * 0.005; // Max 50% opacity screen
+        ctx.drawImage(bCanvas, 0, 0);
+        ctx.globalAlpha = 1.0;
+      }
+    }
+
+    // 6. Cool Cinematic Shadows
+    if (bv.g7xCoolShadows > 0) {
+      const shadowAmt = bv.g7xCoolShadows * 0.01;
+      
+      // To tint shadows blue/cyan without affecting highlights, we use a screen/lighten blend
+      // on a dark blue background, or we use difference/exclusion tricks.
+      // Easiest approach: Fill canvas with deep cyan/blue, use 'lighten' or 'screen' with very low opacity.
+      // This lifts the black point slightly with blue.
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = `rgba(0, 50, 100, ${shadowAmt * 0.3})`;
+      ctx.fillRect(0, 0, w, h);
+      
+      // Counter-balance midtones slightly
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = `rgba(255, 240, 230, ${shadowAmt * 0.1})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // 7. Sensor Grain Injection
+    if (bv.g7xGrainAmount > 0) {
+      const grainTemp = document.createElement('canvas');
+      grainTemp.width = 256;
+      grainTemp.height = 256;
+      const gCtx = grainTemp.getContext('2d');
+      if (gCtx) {
+        const idata = gCtx.createImageData(256, 256);
+        for (let i = 0; i < idata.data.length; i += 4) {
+          const val = Math.random() * 255;
+          idata.data[i] = val;
+          idata.data[i+1] = val;
+          idata.data[i+2] = val;
+          idata.data[i+3] = 255;
+        }
+        gCtx.putImageData(idata, 0, 0);
+
+        ctx.globalCompositeOperation = 'overlay';
+        ctx.globalAlpha = bv.g7xGrainAmount * 0.003;
+        
+        // Tile the noise
+        const pattern = ctx.createPattern(grainTemp, 'repeat');
+        if (pattern) {
+          ctx.fillStyle = pattern;
+          ctx.fillRect(0, 0, w, h);
+        }
+      }
+    }
 
     ctx.restore();
   }

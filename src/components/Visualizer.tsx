@@ -330,6 +330,13 @@ const Visualizer: React.FC = () => {
 
         if (hasLiveVideo) {
           const isExp       = isExportingRef.current;
+          
+          // If exporting deterministically, we pause this UI loop completely
+          if (isExp) {
+            rafRef.current = requestAnimationFrame(loop);
+            return;
+          }
+
           const sx          = isExp ? 0 : w * splitRef.current;
           const bv          = beautyRef.current;
           const landmarks   = landmarksRef.current;
@@ -353,123 +360,13 @@ const Visualizer: React.FC = () => {
           ctx.save();
           ctx.beginPath(); ctx.rect(sx, 0, w - sx, h); ctx.clip();
           
-          // Color Grading Base Filters
-          const exposure = 100 + (bv.cgExposure || 0);
-          const contrast = 100 + (bv.cgContrast || 0);
-          
-          // Vibrance is softer than saturation
-          const satBase = (bv.cgSaturation || 0);
-          const vibBase = (bv.cgVibrance || 0) * 0.5;
-          const saturate = Math.max(0, 100 + satBase + vibBase);
-
-          ctx.filter = `brightness(${exposure}%) contrast(${contrast}%) saturate(${saturate}%)`;
-          ctx.drawImage(video!, 0, 0, w, h);
-          ctx.filter = 'none';
-
-          // Color Overlays (Temperature & Tint)
-          if (bv.cgTemperature || bv.cgTint) {
-            ctx.save();
-            ctx.globalCompositeOperation = 'overlay';
-
-            if (bv.cgTemperature) {
-              const tempAlpha = Math.abs(bv.cgTemperature) * 0.003;
-              ctx.fillStyle = bv.cgTemperature > 0 ? `rgba(255, 140, 0, ${tempAlpha})` : `rgba(0, 102, 255, ${tempAlpha})`;
-              ctx.fillRect(0, 0, w, h);
-            }
-
-            if (bv.cgTint) {
-              const tintAlpha = Math.abs(bv.cgTint) * 0.003;
-              ctx.fillStyle = bv.cgTint > 0 ? `rgba(255, 0, 255, ${tintAlpha})` : `rgba(0, 255, 0, ${tintAlpha})`;
-              ctx.fillRect(0, 0, w, h);
-            }
-            ctx.restore();
-          }
-
-          // Highlights & Shadows (Approximation via blend modes)
-          if (bv.cgHighlights || bv.cgShadows) {
-            ctx.save();
-            if (bv.cgHighlights > 0) {
-              ctx.globalCompositeOperation = 'screen';
-              ctx.globalAlpha = bv.cgHighlights * 0.004;
-              ctx.drawImage(ctx.canvas, 0, 0); 
-            } else if (bv.cgHighlights < 0) {
-              ctx.globalCompositeOperation = 'multiply';
-              ctx.globalAlpha = Math.abs(bv.cgHighlights) * 0.002;
-              ctx.fillStyle = '#cccccc'; 
-              ctx.fillRect(0,0,w,h);
-            }
-
-            if (bv.cgShadows > 0) {
-              ctx.globalCompositeOperation = 'screen';
-              ctx.globalAlpha = bv.cgShadows * 0.004;
-              ctx.fillStyle = '#444444'; 
-              ctx.fillRect(0,0,w,h);
-            } else if (bv.cgShadows < 0) {
-              ctx.globalCompositeOperation = 'multiply';
-              ctx.globalAlpha = Math.abs(bv.cgShadows) * 0.004;
-              ctx.drawImage(ctx.canvas, 0, 0); 
-            }
-            ctx.restore();
-          }
-
-          // Glow, Clarity, and Sharpening (Require Offscreen Canvas Blurs)
-          if (bv.cgGlow || bv.cgClarity || bv.cgSharpening) {
-            const tCanvas = document.createElement('canvas');
-            tCanvas.width = w; tCanvas.height = h;
-            const tCtx = tCanvas.getContext('2d')!;
-            
-            if (bv.cgGlow > 0) {
-              tCtx.filter = 'blur(16px) brightness(150%)';
-              tCtx.drawImage(ctx.canvas, 0, 0);
-              ctx.save();
-              ctx.globalCompositeOperation = 'screen';
-              ctx.globalAlpha = bv.cgGlow * 0.006;
-              ctx.drawImage(tCanvas, 0, 0);
-              ctx.restore();
-            }
-
-            if (bv.cgClarity > 0) {
-              tCtx.clearRect(0,0,w,h);
-              tCtx.filter = 'blur(20px) invert(100%) grayscale(100%) opacity(50%)';
-              tCtx.drawImage(ctx.canvas, 0, 0);
-              ctx.save();
-              ctx.globalCompositeOperation = 'overlay';
-              ctx.globalAlpha = bv.cgClarity * 0.005;
-              ctx.drawImage(tCanvas, 0, 0);
-              ctx.restore();
-            }
-
-            if (bv.cgSharpening > 0) {
-              tCtx.clearRect(0,0,w,h);
-              tCtx.filter = 'blur(1.5px) invert(100%) grayscale(100%) opacity(50%)';
-              tCtx.drawImage(ctx.canvas, 0, 0);
-              ctx.save();
-              ctx.globalCompositeOperation = 'overlay';
-              ctx.globalAlpha = bv.cgSharpening * 0.008;
-              ctx.drawImage(tCanvas, 0, 0);
-              ctx.restore();
-            }
-          }
-
-          // Vignette
-          if (bv.cgVignette > 0) {
-            ctx.save();
-            ctx.globalCompositeOperation = 'multiply';
-            ctx.globalAlpha = bv.cgVignette * 0.01;
-            const cx = w / 2;
-            const cy = h / 2;
-            const radius = Math.max(w, h) * 0.6;
-            const grad = ctx.createRadialGradient(cx, cy, radius * 0.3, cx, cy, radius);
-            grad.addColorStop(0, 'rgba(255,255,255,1)');
-            grad.addColorStop(1, 'rgba(0,0,0,1)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, w, h);
-            ctx.restore();
-          }
+          // Apply Global Color Grading (Draws video to canvas)
+          BeautyEngine.drawVideoWithGlobalColorGrading(ctx, video!, w, h, bv);
           
           // Apply new canvas-based BeautyEngine filters
           BeautyEngine.apply(
             ctx,
+            video!,
             w,
             h,
             landmarks,
@@ -478,7 +375,6 @@ const Visualizer: React.FC = () => {
             maskSizeRef.current.h,
             bv
           );
-          
           // ── Split Slider Line ──
           if (!isExp && sx > 0 && sx < w) {
             ctx.fillStyle = '#fff';
@@ -613,7 +509,11 @@ const Visualizer: React.FC = () => {
       const ratio = vw / vh;
       setCanvasSize({ w: Math.round(720 * ratio), h: 720 });
     };
-    const onTimeUpdate = () => setPlayheadPosition(video.currentTime);
+    const onTimeUpdate = () => {
+      if (!isExportingRef.current) {
+        setPlayheadPosition(video.currentTime);
+      }
+    };
     const onEnded      = () => setIsPlaying(false);
     const onError      = (e: Event) => { console.error('Video error:', e); setHasVideo(false); };
     video.addEventListener('loadedmetadata', onMeta);
