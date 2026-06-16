@@ -1,0 +1,328 @@
+import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
+import Visualizer from './Visualizer';
+import BeautyControls from './BeautyControls';
+import Timeline from './Timeline';
+import Marketplace from './Marketplace';
+import { 
+  ArrowLeft, Undo2, Redo2, Sparkles, Download, 
+  Video, Folder, ShoppingBag, Palette 
+} from 'lucide-react';
+
+const EditorWorkspace: React.FC = () => {
+  const { 
+    setView, 
+    activeProject, 
+    undo, 
+    redo, 
+    canUndo, 
+    canRedo, 
+    isAutoBeautifyActive, 
+    toggleAutoBeautify, 
+    setShowExportModal,
+    user
+  } = useApp();
+
+  const [activeTab, setActiveTab] = useState<'media' | 'presets' | 'marketplace' | 'color'>('color');
+
+  return (
+    <div className="h-screen w-screen flex flex-col bg-studio-darker overflow-hidden text-gray-200 select-none font-sans relative">
+      
+      {/* Top Header Bar */}
+      <header className="h-14 bg-studio-dark border-b border-white/5 px-4 flex items-center justify-between z-20 shrink-0">
+        
+        {/* Left Side: Back & Project Title */}
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setView('dashboard')}
+            className="h-8 px-3 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-2 text-xs font-semibold text-gray-300 hover:text-white transition-all active:scale-[0.97]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Dashboard</span>
+          </button>
+          
+          <div className="h-4 w-[1px] bg-white/10" />
+          
+          <div className="flex items-center gap-2">
+            <Video className="h-4 w-4 text-purple-400" />
+            <span className="text-xs font-bold text-white max-w-[200px] truncate">
+              {activeProject?.name || 'Project Workspace'}
+            </span>
+            {activeProject?.video?.resolution && (
+              <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-gray-400 font-medium">
+                {activeProject.video.resolution.includes('4K') ? '4K UHD' : 'FHD 1080p'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Center: Undo / Redo & AI Auto */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-white/3 rounded-lg p-0.5 border border-white/5">
+            <button 
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+              className="h-7 w-7 rounded-md flex items-center justify-center text-gray-400 hover:text-white disabled:opacity-40 disabled:hover:text-gray-400 transition-colors"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </button>
+            <button 
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo (Ctrl+Y)"
+              className="h-7 w-7 rounded-md flex items-center justify-center text-gray-400 hover:text-white disabled:opacity-40 disabled:hover:text-gray-400 transition-colors"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <button
+            onClick={toggleAutoBeautify}
+            className={`h-8 px-4 rounded-lg flex items-center gap-1.5 font-bold text-xs transition-all active:scale-[0.97] ${
+              isAutoBeautifyActive 
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25 border border-purple-400/20' 
+                : 'bg-white/5 hover:bg-white/10 text-purple-300 border border-purple-500/20'
+            }`}
+          >
+            <Sparkles className={`h-3.5 w-3.5 ${isAutoBeautifyActive ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+            <span>{isAutoBeautifyActive ? 'AI Enabled' : 'Auto Beautify'}</span>
+          </button>
+        </div>
+
+        {/* Right Side: Pro badge and Export */}
+        <div className="flex items-center gap-3">
+          {user?.isPro && (
+            <span className="text-[9px] bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wider">
+              Pro Export
+            </span>
+          )}
+          <button 
+            onClick={() => setShowExportModal(true)}
+            className="h-8 px-4 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-purple-500/10 active:scale-[0.97] transition-all"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Export Video</span>
+          </button>
+        </div>
+
+      </header>
+
+      {/* Main Workspace Layout */}
+      <div className="flex-1 flex overflow-hidden min-h-0 z-10">
+        
+        {/* Left Toolbar (Tabs switcher) */}
+        <nav className="w-14 bg-studio-dark/95 border-r border-white/5 flex flex-col items-center py-4 gap-4 shrink-0">
+          {[
+            { id: 'color', icon: Palette, label: 'Color' },
+            { id: 'presets', icon: Sparkles, label: 'Lenses' },
+            { id: 'marketplace', icon: ShoppingBag, label: 'Market' },
+            { id: 'media', icon: Folder, label: 'Assets' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              title={tab.label}
+              className={`h-10 w-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+                activeTab === tab.id
+                  ? 'bg-purple-500/10 text-purple-400 border border-purple-500/25'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/3 border border-transparent'
+              }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              <span className="text-[8px] font-bold">{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Left Sidebar Content Panel (300px width) */}
+        <aside className="w-[280px] bg-studio-dark/40 border-r border-white/5 flex flex-col shrink-0 panel-transition">
+          {activeTab === 'color' && (
+            <VideoColorGradingPanel />
+          )}
+
+          {activeTab === 'media' && (
+            <div className="p-4 flex-1 flex flex-col overflow-y-auto space-y-4">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">Project Assets</h3>
+              {activeProject?.video ? (
+                <div className="p-3 rounded-xl bg-white/2 border border-white/5 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-white truncate">
+                    <Video className="h-4 w-4 text-purple-400 shrink-0" />
+                    <span>{activeProject.video.name}</span>
+                  </div>
+                  <div className="space-y-1.5 text-[10px] text-gray-400">
+                    <div className="flex justify-between">
+                      <span>Resolution:</span>
+                      <span className="text-white font-medium">{activeProject.video.resolution}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Frame Rate:</span>
+                      <span className="text-white font-medium">{activeProject.video.fps} FPS</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Duration:</span>
+                      <span className="text-white font-medium">{activeProject.video.duration}s</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>File Size:</span>
+                      <span className="text-white font-medium">{activeProject.video.size}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 text-center py-6">No media imported</p>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'presets' && (
+            <BeautyPresetsList />
+          )}
+
+          {activeTab === 'marketplace' && (
+            <Marketplace />
+          )}
+        </aside>
+
+        {/* Center Canvas Area & Timeline (Flexible) */}
+        <section className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Top: Video Visualizer preview */}
+          <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden min-h-0">
+            <Visualizer />
+          </div>
+
+          {/* Bottom: Timeline Editor */}
+          <div className="h-[240px] border-t border-white/5 bg-studio-dark/80 shrink-0 flex flex-col">
+            <Timeline />
+          </div>
+        </section>
+
+        {/* Right Sidebar: Face Tuning Sliders */}
+        <aside className="w-[320px] bg-studio-dark/85 border-l border-white/5 overflow-y-auto shrink-0 z-10 flex flex-col">
+          <BeautyControls />
+        </aside>
+
+      </div>
+
+    </div>
+  );
+};
+
+// Internal Subcomponent for Preset filters sidebar
+const BeautyPresetsList: React.FC = () => {
+  const { applyPreset, activePreset } = useApp();
+
+  const presetsArray = [
+    { name: 'None', desc: 'Original unaltered recording' },
+    { name: 'Natural Beauty', desc: 'Subtle enhancement, smooth skin, eye glow' },
+    { name: 'Soft Glam', desc: 'Vibrant highlight, pink lips, reshaping' },
+    { name: 'Bridal Glow', desc: 'Clear brightening, bright smile, rose hue' },
+    { name: 'Fashion Model', desc: 'Sharp details, high cheekbones, dark lips' },
+    { name: 'Korean Beauty', desc: 'Glass-skin effect, baby face proportions' },
+    { name: 'TikTok Creator', desc: 'Contoured chin, shiny lips, cute enlarge eyes' },
+    { name: 'Snapchat Beauty', desc: 'Max skin correction, extreme doll eyes' },
+    { name: 'Golden Hour Glow', desc: 'Sunset filter tones, golden eyes highlight' }
+  ];
+
+  return (
+    <div className="p-4 flex-1 flex flex-col overflow-hidden">
+      <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3 shrink-0">One-Click Beauty Lenses</h3>
+      <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+        {presetsArray.map((preset) => (
+          <div
+            key={preset.name}
+            onClick={() => applyPreset(preset.name)}
+            className={`p-3 rounded-xl border cursor-pointer transition-all ${
+              activePreset === preset.name
+                ? 'bg-purple-500/10 border-purple-500/40'
+                : 'bg-white/2 border-white/5 hover:bg-white/4 hover:border-white/10'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-xs font-bold ${activePreset === preset.name ? 'text-purple-300' : 'text-white'}`}>
+                {preset.name}
+              </span>
+              {activePreset === preset.name && (
+                <span className="h-2 w-2 rounded-full bg-purple-400 shadow-md shadow-purple-500" />
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1 leading-snug">{preset.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Internal Subcomponent for Color Grading
+const VideoColorGradingPanel: React.FC = () => {
+  const { beautyValues, updateBeautyValue } = useApp();
+
+  const SliderGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
+    <div className="space-y-4 mb-6">
+      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest pb-1 border-b border-white/5">{title}</h4>
+      <div className="space-y-4">
+        {children}
+      </div>
+    </div>
+  );
+
+  const ColorSlider = ({ label, valueKey, min = -100, max = 100, isPercent = false }: { label: string, valueKey: keyof BeautyValues, min?: number, max?: number, isPercent?: boolean }) => {
+    const val = beautyValues[valueKey] as number;
+    return (
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-[11px] font-medium text-gray-300">
+          <span>{label}</span>
+          <span className="text-purple-300 font-mono text-[10px] font-bold">
+            {val > 0 && min < 0 ? '+' : ''}{val}{isPercent ? '%' : ''}
+          </span>
+        </div>
+        <input 
+          type="range" 
+          min={min} 
+          max={max} 
+          value={val} 
+          onChange={(e) => updateBeautyValue(valueKey, parseInt(e.target.value))} 
+          className="w-full h-1.5 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full cursor-pointer accent-purple-500" 
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-4 flex-1 flex flex-col overflow-hidden">
+      <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-6 shrink-0 flex items-center gap-2">
+        <Palette className="h-4 w-4 text-purple-400" />
+        Global Color Grade
+      </h3>
+      
+      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+        <SliderGroup title="Light">
+          <ColorSlider label="Exposure" valueKey="cgExposure" min={-50} max={100} isPercent />
+          <ColorSlider label="Contrast" valueKey="cgContrast" min={-50} max={100} isPercent />
+          <ColorSlider label="Highlights" valueKey="cgHighlights" min={-100} max={100} />
+          <ColorSlider label="Shadows" valueKey="cgShadows" min={-100} max={100} />
+        </SliderGroup>
+
+        <SliderGroup title="Color">
+          <ColorSlider label="Temperature" valueKey="cgTemperature" min={-100} max={100} />
+          <ColorSlider label="Tint" valueKey="cgTint" min={-100} max={100} />
+          <ColorSlider label="Vibrance" valueKey="cgVibrance" min={-100} max={100} isPercent />
+          <ColorSlider label="Saturation" valueKey="cgSaturation" min={-100} max={100} isPercent />
+        </SliderGroup>
+
+        <SliderGroup title="Effects">
+          <ColorSlider label="Glow (Bloom)" valueKey="cgGlow" min={0} max={100} isPercent />
+          <ColorSlider label="Clarity" valueKey="cgClarity" min={0} max={100} />
+          <ColorSlider label="Vignette" valueKey="cgVignette" min={0} max={100} isPercent />
+        </SliderGroup>
+
+        <SliderGroup title="Detail">
+          <ColorSlider label="Sharpening" valueKey="cgSharpening" min={0} max={100} />
+        </SliderGroup>
+      </div>
+    </div>
+  );
+};
+
+export default EditorWorkspace;
