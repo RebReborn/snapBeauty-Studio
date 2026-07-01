@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://snapbeauty-studio.web.app/sitemap.xml
+Sitemap: https://snapbeautystudio.com/sitemap.xml
