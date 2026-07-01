@@ -1,73 +1,13 @@
 // BeautyEngine.ts — High-performance HTML5 Canvas 2D Beauty Processing Engine.
 
-
+import { LucidEngine } from './LucidEngine';
+import { BeautyValues } from '../context/AppContext';
 
 export interface Point2D {
   x: number;
   y: number;
 }
 
-export interface BeautyValues {
-  skinSmoothness: number;
-  skinBlemish: number;
-  skinAcne: number;
-  skinWrinkle: number;
-  skinOil: number;
-  skinTone: number;
-  
-  teethWhitening: number;
-  teethBrightness: number;
-  teethNatural: number;
-  teethPremium: number;
-  
-  eyeBrightening: number;
-  eyeSharpening: number;
-  eyeDarkCircle: number;
-  eyeEnlargement: number;
-  eyeIrisDetail: number;
-  eyeColor: 'default' | 'blue' | 'green' | 'hazel' | 'gray' | 'violet';
-  
-  faceSlimming: number;
-  faceJawline: number;
-  faceCheek: number;
-  faceChin: number;
-  
-  noseWidth: number;
-  noseBridge: number;
-  noseLength: number;
-  
-  lipFullness: number;
-  lipColor: string;
-  lipColorIntensity: number;
-  lipGloss: number;
-  lipDefinition: number;
-  lipTexture: 'matte' | 'gloss' | 'sheen';
-
-  // Digital Makeup
-  makeupBlush: number;
-  makeupBlushColor: string;
-  makeupEyeshadow: number;
-  makeupEyeshadowColor: string;
-  makeupEyeliner: number;
-  makeupEyelinerColor: string;
-  makeupMascara: number;
-  makeupContour: number;
-  makeupEyebrows: number;
-  makeupEyebrowsColor: string;
-
-  // Color Grading (Global)
-  cgWarmth: number;
-  cgSaturation: number;
-  cgContrast: number;
-  cgBrightness: number;
-  
-  // Color Grading (Face Only)
-  faceWarmth: number;
-  faceTint: number;
-  faceSaturation: number;
-  faceContrast: number;
-  faceBrightness: number;
-}
 
 // MediaPipe FaceMesh indices
 const JAWLINE_INDICES = [
@@ -95,7 +35,7 @@ export class BeautyEngine {
    */
   static drawVideoWithGlobalColorGrading(
     ctx: CanvasRenderingContext2D,
-    video: HTMLVideoElement,
+    video: HTMLVideoElement | CanvasImageSource,
     w: number,
     h: number,
     bv: BeautyValues
@@ -227,7 +167,7 @@ export class BeautyEngine {
    */
   static apply(
     ctx: CanvasRenderingContext2D,
-    video: HTMLVideoElement,
+    video: HTMLVideoElement | CanvasImageSource,
     width: number,
     height: number,
     landmarks: Array<{ x: number; y: number; z: number }> | null,
@@ -264,10 +204,13 @@ export class BeautyEngine {
     // 2. Eye Enlargement
     this.enlargeEyes(ctx, ptsUpdated, beautyValues);
 
-    // 3. Skin Smoothing & Glow (using vector boundaries and segmentation mask)
+    // 3. Body Skin Retouching (Chroma-Key)
+    this.processBodySkin(ctx, video, ptsUpdated, beautyValues);
+
+    // 4. Skin Smoothing & Glow (Face only)
     this.smoothSkin(ctx, ptsUpdated, segmentationMask, maskWidth, maskHeight, beautyValues);
     
-    // 4. Teeth Whitening
+    // 5. Teeth Whitening
     this.whitenTeeth(ctx, ptsUpdated, beautyValues);
 
     // 5. Eye Brightening & Detail enhancement
@@ -278,6 +221,110 @@ export class BeautyEngine {
 
     // 7. G7X Camera Flash Look (Background dimming, grain, highlight boost)
     this.applyG7XFlashLook(ctx, video, segmentationMask, maskWidth, maskHeight, beautyValues);
+
+    // 8. Lucid Detail & Clarity Engine
+    // During live preview (called here), we pass fps=30 and isExporting=false
+    LucidEngine.apply(ctx, video, 30, beautyValues, false);
+  }
+
+  /**
+   * Applies chroma-key based skin smoothing to the body, excluding the face.
+   */
+  private static processBodySkin(
+    ctx: CanvasRenderingContext2D,
+    video: HTMLVideoElement | CanvasImageSource,
+    pts: Point2D[],
+    bv: BeautyValues
+  ) {
+    if (bv.bodySkinRetouch <= 0 || !bv.bodySkinColor) return;
+
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    
+    // Downscale by 15% for fast mask generation
+    const scale = 0.15;
+    const dw = Math.floor(w * scale);
+    const dh = Math.floor(h * scale);
+    
+    // Create offscreen canvas for downscaled image
+    const downCanvas = document.createElement('canvas');
+    downCanvas.width = dw; downCanvas.height = dh;
+    const dCtx = downCanvas.getContext('2d');
+    if (!dCtx) return;
+    dCtx.drawImage(video, 0, 0, dw, dh);
+    
+    // Extract RGB from selected hex color
+    const hex = bv.bodySkinColor.replace('#', '');
+    const targetR = parseInt(hex.substring(0, 2), 16);
+    const targetG = parseInt(hex.substring(2, 4), 16);
+    const targetB = parseInt(hex.substring(4, 6), 16);
+    
+    const imgData = dCtx.getImageData(0, 0, dw, dh);
+    const data = imgData.data;
+    
+    // Tolerance for color match (adjustable via UI slider: 0-100)
+    // 50 is default (around 80 threshold). Range: ~30 to 180
+    const tolerance = bv.bodySkinTolerance ?? 50;
+    const threshold = 30 + (tolerance * 1.5); 
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i+1];
+      const b = data[i+2];
+      
+      const dist = Math.sqrt(
+        Math.pow(r - targetR, 2) +
+        Math.pow(g - targetG, 2) +
+        Math.pow(b - targetB, 2)
+      );
+      
+      if (dist < threshold) {
+        data[i+3] = 255; 
+      } else {
+        data[i+3] = 0;   
+      }
+    }
+    dCtx.putImageData(imgData, 0, 0);
+    
+    const skinLayer = document.createElement('canvas');
+    skinLayer.width = w; skinLayer.height = h;
+    const sCtx = skinLayer.getContext('2d');
+    if (!sCtx) return;
+    
+    // Apply a large blur and slight brightness boost to make it look like retouched skin
+    sCtx.filter = 'brightness(1.05) contrast(1.05) blur(24px)';
+    sCtx.drawImage(downCanvas, 0, 0, w, h);
+    sCtx.filter = 'none';
+    
+    sCtx.globalCompositeOperation = 'source-in';
+    sCtx.drawImage(video, 0, 0, w, h);
+    
+    sCtx.globalCompositeOperation = 'destination-out';
+    sCtx.beginPath();
+    
+    const xCoords = pts.map(p => p.x);
+    const yCoords = pts.map(p => p.y);
+    const minX = Math.min(...xCoords);
+    const maxX = Math.max(...xCoords);
+    const minY = Math.min(...yCoords);
+    const maxY = Math.max(...yCoords);
+    
+    const marginW = (maxX - minX) * 0.2;
+    const marginH = (maxY - minY) * 0.2;
+    
+    sCtx.rect(
+      minX - marginW, 
+      minY - marginH * 2,
+      (maxX - minX) + marginW * 2, 
+      (maxY - minY) + marginH * 3
+    );
+    sCtx.fill();
+    
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = bv.bodySkinRetouch * 0.01;
+    ctx.drawImage(skinLayer, 0, 0);
+    ctx.restore();
   }
 
   /**
@@ -431,8 +478,9 @@ export class BeautyEngine {
   private static enhanceEyes(ctx: CanvasRenderingContext2D, pts: Point2D[], bv: BeautyValues) {
     const brightening = bv.eyeBrightening / 100;
     const sharpening = (bv.eyeSharpening * 0.6 + (bv.eyeIrisDetail || 0) * 0.4) / 100;
+    const irisBrightness = (bv.eyeIrisBrightness || 0) / 100;
     
-    if (brightening <= 0.05 && sharpening <= 0.05) return;
+    if (brightening <= 0.05 && sharpening <= 0.05 && irisBrightness <= 0.05) return;
 
     const drawEyePath = (indices: number[]) => {
       ctx.beginPath();
@@ -446,15 +494,62 @@ export class BeautyEngine {
       }
     };
 
+    const drawIrisPath = (indices: number[], isLeft: boolean, reverse = false) => {
+      const irisIndices = isLeft ? [474, 475, 476, 477] : [469, 470, 471, 472];
+      if (pts.length > 470 && pts[irisIndices[0]]) {
+        ctx.moveTo(pts[irisIndices[0]].x, pts[irisIndices[0]].y);
+        if (reverse) {
+          for (let i = irisIndices.length - 1; i >= 0; i--) {
+            if (pts[irisIndices[i]]) ctx.lineTo(pts[irisIndices[i]].x, pts[irisIndices[i]].y);
+          }
+        } else {
+          for (let i = 1; i < irisIndices.length; i++) {
+            if (pts[irisIndices[i]]) ctx.lineTo(pts[irisIndices[i]].x, pts[irisIndices[i]].y);
+          }
+        }
+        ctx.closePath();
+      } else {
+        // Fallback approximation
+        let cx = 0, cy = 0;
+        let minX = Infinity, maxX = -Infinity;
+        for (const idx of indices) {
+          if (pts[idx]) {
+            cx += pts[idx].x; cy += pts[idx].y;
+            minX = Math.min(minX, pts[idx].x);
+            maxX = Math.max(maxX, pts[idx].x);
+          }
+        }
+        cx /= indices.length; cy /= indices.length;
+        const radius = (maxX - minX) * 0.28;
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2, reverse);
+      }
+    };
+
+    const drawScleraPath = (indices: number[], isLeft: boolean) => {
+      drawEyePath(indices); // Outer contour
+      drawIrisPath(indices, isLeft, true); // Inner hole
+    };
+
     [LEFT_EYE_INDICES, RIGHT_EYE_INDICES].forEach(indices => {
+      const isLeft = indices === LEFT_EYE_INDICES;
       ctx.save();
       drawEyePath(indices);
-      ctx.clip();
+      ctx.clip(); // Clip to the whole eye
 
       if (brightening > 0.05) {
         ctx.globalCompositeOperation = 'screen';
         ctx.globalAlpha = brightening * 0.22;
         ctx.fillStyle = '#ffffff';
+        drawScleraPath(indices, isLeft);
+        ctx.fill('evenodd');
+      }
+
+      if (irisBrightness > 0.05) {
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = irisBrightness * 0.35;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        drawIrisPath(indices, isLeft, false);
         ctx.fill();
       }
 
@@ -482,9 +577,9 @@ export class BeautyEngine {
    */
   private static enlargeEyes(ctx: CanvasRenderingContext2D, pts: Point2D[], bv: BeautyValues) {
     const intensity = bv.eyeEnlargement / 100;
-    if (intensity <= 0.05) return;
+    if (Math.abs(intensity) <= 0.05) return;
 
-    const scale = 1.0 + intensity * 0.08; // scale up to 8% larger
+    const scale = 1.0 + intensity * 0.08; // scale up if positive, down if negative
 
     const processEye = (indices: number[]) => {
       // Calculate center of eye
@@ -734,7 +829,7 @@ export class BeautyEngine {
    */
   private static plumpLips(ctx: CanvasRenderingContext2D, pts: Point2D[], bv: BeautyValues) {
     const fullness = bv.lipFullness / 100;
-    if (fullness <= 0.05) return;
+    if (Math.abs(fullness) <= 0.05) return;
 
     const top = pts[0]; 
     const bottom = pts[17]; 
@@ -928,7 +1023,6 @@ export class BeautyEngine {
           ctx.beginPath();
           ctx.moveTo(pt.x, pt.y);
           // angle radiates outward based on position
-          const angleOffset = isLeft ? -0.5 : 0.5;
           ctx.quadraticCurveTo(pt.x + (isLeft ? -5 : 5), pt.y - 10, pt.x + (isLeft ? -8 : 8), pt.y - 12);
           ctx.stroke();
         }
@@ -1100,7 +1194,7 @@ export class BeautyEngine {
    */
   static applyG7XFlashLook(
     ctx: CanvasRenderingContext2D,
-    video: HTMLVideoElement,
+    _video: HTMLVideoElement | CanvasImageSource,
     maskData: Uint8ClampedArray | null,
     maskW: number,
     maskH: number,
@@ -1181,11 +1275,11 @@ export class BeautyEngine {
       subjTemp.height = h;
       const sCtx = subjTemp.getContext('2d');
       if (sCtx) {
-        // Draw video with contrast filter
+        // Draw current canvas (with existing enhancements) with contrast filter
         if (bv.g7xSubjectContrast > 0) {
           sCtx.filter = `contrast(${100 + bv.g7xSubjectContrast}%)`;
         }
-        sCtx.drawImage(video, 0, 0, w, h);
+        sCtx.drawImage(ctx.canvas, 0, 0, w, h);
         sCtx.filter = 'none';
         
         // Boost flash brightness (overlay)

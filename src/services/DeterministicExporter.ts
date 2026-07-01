@@ -1,5 +1,8 @@
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
-import { BeautyEngine, BeautyValues } from './BeautyEngine';
+import { WebDemuxer } from 'web-demuxer';
+import { BeautyEngine } from './BeautyEngine';
+import { BeautyValues } from '../context/AppContext';
+import { LucidEngine } from './LucidEngine';
 import { faceMeshEngine } from './FaceMeshEngine';
 
 export interface ExportOptions {
@@ -13,6 +16,40 @@ export interface ExportOptions {
   onComplete: (downloadUrl: string, fileName: string) => void;
   onError: (err: any) => void;
   projectName?: string;
+  sourceFile?: File;
+}
+
+class CanvasPool {
+  private pool: (HTMLCanvasElement | OffscreenCanvas)[] = [];
+  constructor(private width: number, private height: number) {}
+
+  acquire(): HTMLCanvasElement | OffscreenCanvas {
+    if (this.pool.length > 0) {
+      return this.pool.pop()!;
+    }
+    if (typeof OffscreenCanvas !== 'undefined') {
+      return new OffscreenCanvas(this.width, this.height);
+    } else {
+      const c = document.createElement('canvas');
+      c.width = this.width;
+      c.height = this.height;
+      return c;
+    }
+  }
+
+  release(canvas: HTMLCanvasElement | OffscreenCanvas) {
+    this.pool.push(canvas);
+  }
+
+  clear() {
+    this.pool = [];
+  }
+}
+
+interface DecodedFrameItem {
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  timestamp: number; // in seconds
+  duration: number; // in seconds
 }
 
 export class DeterministicExporter {
@@ -30,7 +67,22 @@ export class DeterministicExporter {
   }
 
   static async exportVideo(options: ExportOptions): Promise<void> {
-    const { videoElement, beautyValues, resolution, fps = 30, sourceStart = 0, sourceEnd, onProgress, onComplete, onError, projectName = 'Processed_Video' } = options;
+    const { 
+      videoElement, 
+      beautyValues, 
+      resolution, 
+      fps = 30, 
+      sourceStart = 0, 
+      sourceEnd, 
+      onProgress, 
+      onComplete, 
+      onError, 
+      projectName = 'Processed_Video',
+      sourceFile
+    } = options;
+
+    let demuxer: WebDemuxer | null = null;
+    let canvasPool: CanvasPool | null = null;
 
     try {
       const isVertical = videoElement.videoHeight > videoElement.videoWidth;
@@ -45,7 +97,7 @@ export class DeterministicExporter {
         throw new Error('Video duration is invalid or 0.');
       }
 
-      // Create an OffscreenCanvas (or a hidden standard canvas if OffscreenCanvas is unavailable)
+      // Create an OffscreenCanvas for final rendering & encoding
       let shaderCanvas: HTMLCanvasElement | OffscreenCanvas;
       let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
 
@@ -63,7 +115,29 @@ export class DeterministicExporter {
         throw new Error('Failed to get 2D context for exporter canvas.');
       }
 
-      // Fetch and decode audio
+      // Initialize CanvasPool
+      canvasPool = new CanvasPool(width, height);
+
+      // Initialize demuxer
+      const wasmUrl = new URL('/wasm/web-demuxer.wasm', window.location.origin).href;
+      demuxer = new WebDemuxer({
+        wasmFilePath: wasmUrl
+      });
+      let source: File | string = sourceFile || videoElement.src;
+      if (typeof source === 'string' && source.startsWith('blob:')) {
+        try {
+          const response = await fetch(source);
+          const blob = await response.blob();
+          source = new File([blob], 'input.mp4', { type: blob.type || 'video/mp4' });
+        } catch (e) {
+          console.warn("Failed to fetch blob URL on main thread, falling back to URL string:", e);
+        }
+      }
+      await demuxer.load(source);
+
+      const videoDecoderConfig = await demuxer.getDecoderConfig('video');
+
+      // Fetch and decode audio via AudioContext for robust synchronization
       let audioBuffer: AudioBuffer | null = null;
       try {
         const response = await fetch(videoElement.src);
@@ -111,22 +185,24 @@ export class DeterministicExporter {
       if (resolution === '4K') bitrate = 60_000_000;
 
       encoder.configure({
-        codec: 'avc1.640034', // High profile for better quality
+        codec: 'avc1.640034', // High profile
         width: width,
         height: height,
         bitrate: bitrate,
+        bitrateMode: 'constant',
         framerate: fps,
-        hardwareAcceleration: 'prefer-hardware'
+        hardwareAcceleration: 'prefer-hardware',
+        latencyMode: 'quality'
       });
 
-      // Configure Audio Encoder
+      // Configure Audio Encoder if supported
       let audioEncoder: AudioEncoder | null = null;
       if (audioBuffer && (window as any).AudioEncoder) {
         audioEncoder = new (window as any).AudioEncoder({
           output: (chunk: any, metadata: any) => muxer.addAudioChunk(chunk, metadata),
           error: (e: any) => console.error("Audio Encoding error:", e)
         });
-        audioEncoder.configure({
+        audioEncoder!.configure({
           codec: 'mp4a.40.2',
           numberOfChannels: audioBuffer.numberOfChannels,
           sampleRate: audioBuffer.sampleRate,
@@ -157,87 +233,216 @@ export class DeterministicExporter {
             data: planarData
           });
           
-          audioEncoder.encode(audioData);
+          audioEncoder!.encode(audioData);
           audioData.close();
         }
       }
 
-      const frameDurationInMicroseconds = 1_000_000 / fps;
+      // WebCodecs Decoded Frames sliding window state
+      const decodedFramesQueue: DecodedFrameItem[] = [];
+      let isFinishedDecoding = false;
+      let pendingFramesCount = 0;
+      let resumeDecoding: (() => void) | null = null;
+      let isProcessing = false;
+      let framesProcessed = 0;
+      let lastProcessedCanvas: HTMLCanvasElement | OffscreenCanvas | null = null;
 
-      // Secure seek method avoiding race condition drops
-      const seekToFrame = (video: HTMLVideoElement, time: number) => {
-        return new Promise<void>((resolve) => {
-          if (video.currentTime === time) {
-            resolve();
-            return;
+      // Synchronization deferred promises
+      let onExportComplete: () => void;
+      let onExportError: (err: any) => void;
+      const exportFinishedPromise = new Promise<void>((resolve, reject) => {
+        onExportComplete = resolve;
+        onExportError = reject;
+      });
+
+      const processQueue = async () => {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        try {
+          while (true) {
+            if (decodedFramesQueue.length === 0) {
+              break;
+            }
+
+            // We need at least 2 frames in queue to define current and next.
+            // If the stream is finished decoding, we process whatever remains.
+            if (!isFinishedDecoding && decodedFramesQueue.length < 2) {
+              break;
+            }
+
+            const currentItem = decodedFramesQueue[0];
+            const nextItem = decodedFramesQueue.length > 1 ? decodedFramesQueue[1] : currentItem;
+            const prevCanvas = lastProcessedCanvas || currentItem.canvas;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw current frame with Global Color Grading applied
+            BeautyEngine.drawVideoWithGlobalColorGrading(
+              ctx as CanvasRenderingContext2D,
+              currentItem.canvas,
+              width,
+              height,
+              beautyValues
+            );
+
+            // Process face mesh landmarks on current frame canvas
+            const aiResult = await faceMeshEngine.processFrame(currentItem.canvas, currentItem.timestamp * 1000);
+
+            if (aiResult) {
+              BeautyEngine.apply(
+                ctx as CanvasRenderingContext2D,
+                currentItem.canvas,
+                width,
+                height,
+                aiResult.landmarks,
+                aiResult.segmentationMask,
+                aiResult.maskWidth,
+                aiResult.maskHeight,
+                beautyValues
+              );
+            }
+
+            // Apply Temporal Lucid Engine Pass using sliding window
+            await LucidEngine.apply(
+              ctx as CanvasRenderingContext2D,
+              currentItem.canvas,
+              fps,
+              beautyValues,
+              true, // isExporting = true
+              {
+                prev: prevCanvas,
+                current: currentItem.canvas,
+                next: nextItem.canvas
+              }
+            );
+
+            // Encode the final rendered frame
+            const timestampUs = Math.round((currentItem.timestamp - startSec) * 1e6);
+            const durationUs = Math.round((currentItem.duration || (1 / fps)) * 1e6);
+
+            const frame = new VideoFrame(shaderCanvas as CanvasImageSource, {
+              timestamp: timestampUs,
+              duration: durationUs,
+              alpha: 'discard'
+            });
+
+            const insertKeyframe = (framesProcessed % (fps * 2) === 0);
+            encoder.encode(frame, { keyFrame: insertKeyframe });
+            frame.close();
+
+            framesProcessed++;
+
+            // Clean up and release prev canvas back to pool
+            if (lastProcessedCanvas) {
+              canvasPool!.release(lastProcessedCanvas);
+            }
+
+            lastProcessedCanvas = currentItem.canvas;
+            decodedFramesQueue.shift();
+
+            // Progress callback (capped at 99% until fully muxed)
+            const progress = Math.min(99, (framesProcessed / totalFrames) * 100);
+            onProgress(progress);
+
+            // Handle backpressure
+            pendingFramesCount--;
+            if (pendingFramesCount < 2 && resumeDecoding) {
+              resumeDecoding();
+              resumeDecoding = null;
+            }
+
+            // Yield control back to browser momentarily to allow UI elements/progress bars to draw
+            await new Promise(resolve => setTimeout(resolve, 0));
           }
-          const onSeeked = () => {
-            video.removeEventListener('seeked', onSeeked);
-            resolve();
-          };
-          video.addEventListener('seeked', onSeeked);
-          video.currentTime = time;
-        });
+
+          // If decoding is finished and the queue is completely drained, we are done
+          if (isFinishedDecoding && decodedFramesQueue.length === 0) {
+            if (lastProcessedCanvas) {
+              canvasPool!.release(lastProcessedCanvas);
+              lastProcessedCanvas = null;
+            }
+            onExportComplete();
+          }
+
+        } catch (err) {
+          console.error("Queue processing error:", err);
+          onExportError(err);
+        } finally {
+          isProcessing = false;
+        }
       };
 
-      // Loop deterministically
-      for (let i = 0; i < totalFrames; i++) {
-        // Explicitly force sizes if using an internal element to prevent mismatching frame boundaries
-        if (shaderCanvas instanceof HTMLCanvasElement) {
-          shaderCanvas.width = width;
-          shaderCanvas.height = height;
+      // Initialize VideoDecoder
+      const decoder = new VideoDecoder({
+        output: (frame) => {
+          const canvas = canvasPool!.acquire();
+          const canvasCtx = canvas.getContext('2d');
+          if (canvasCtx) {
+            canvasCtx.drawImage(frame, 0, 0, width, height);
+          }
+
+          const item: DecodedFrameItem = {
+            canvas,
+            timestamp: frame.timestamp / 1e6,
+            duration: (frame.duration || 0) / 1e6
+          };
+
+          decodedFramesQueue.push(item);
+          frame.close();
+
+          // Increment and check backpressure
+          pendingFramesCount++;
+          processQueue();
+        },
+        error: (e) => {
+          console.error("Decoder error:", e);
+          onExportError(e);
+        }
+      });
+
+      decoder.configure(videoDecoderConfig);
+
+      // Start consuming the demuxer stream
+      const chunkStream = demuxer.read('video', startSec, endSec);
+      const reader = chunkStream.getReader();
+
+      while (true) {
+        if (pendingFramesCount >= 4) {
+          await new Promise<void>((resolve) => {
+            resumeDecoding = resolve;
+          });
         }
 
-        // Seek to frame safely
-        await seekToFrame(videoElement, startSec + (i / fps));
-
-        // Run AI processing
-        const aiResult = await faceMeshEngine.processFrame(videoElement, performance.now());
-
-        // Clear canvas and draw video with Global Color Grading applied
-        ctx.clearRect(0, 0, width, height);
-        BeautyEngine.drawVideoWithGlobalColorGrading(ctx as CanvasRenderingContext2D, videoElement, width, height, beautyValues);
-
-        if (aiResult) {
-          // Note: BeautyEngine.apply expects a standard CanvasRenderingContext2D.
-          // Since OffscreenCanvasRenderingContext2D is mostly compatible, we cast it.
-          BeautyEngine.apply(
-            ctx as CanvasRenderingContext2D,
-            videoElement,
-            width,
-            height,
-            aiResult.landmarks,
-            aiResult.segmentationMask,
-            aiResult.maskWidth,
-            aiResult.maskHeight,
-            beautyValues
-          );
+        const { done, value: chunk } = await reader.read();
+        if (done) {
+          break;
         }
 
-        // Create WebCodecs VideoFrame
-        const timestamp = i * frameDurationInMicroseconds;
-        const frame = new VideoFrame(shaderCanvas as CanvasImageSource, { timestamp, alpha: 'discard' });
-
-        // Encode frame
-        const insertKeyframe = (i % (fps * 2) === 0);
-        encoder.encode(frame, { keyFrame: insertKeyframe });
-        frame.close();
-
-        // Fix backpressure: If the encoder queue is backing up, pause the loop to let the GPU breathe
-        if (encoder.encodeQueueSize > 4) {
-          await new Promise((resolve) => setTimeout(resolve, 15)); // Yield thread control momentarily
-        }
-
-        // Update progress
-        onProgress((i / totalFrames) * 100);
+        decoder.decode(chunk);
       }
 
-      // Flush and finalize
+      // Flush decoder
+      await decoder.flush();
+      isFinishedDecoding = true;
+
+      // Force processing of final lookahead frame at the end of the queue
+      await processQueue();
+
+      // Wait for rendering and encoding to finish
+      await exportFinishedPromise;
+
+      // Flush encoders
       await encoder.flush();
       if (audioEncoder) {
         await audioEncoder.flush();
       }
+
+      // Finalize the MP4 file container structure
       muxer.finalize();
+
+      // Clean up demuxer
+      demuxer.destroy();
 
       const { buffer } = muxer.target as ArrayBufferTarget;
       const mp4Blob = new Blob([buffer], { type: 'video/mp4' });
@@ -247,7 +452,14 @@ export class DeterministicExporter {
 
     } catch (err) {
       console.error('Export Error:', err);
+      if (demuxer) {
+        try { demuxer.destroy(); } catch (_) {}
+      }
       onError(err);
+    } finally {
+      if (canvasPool) {
+        canvasPool.clear();
+      }
     }
   }
 }

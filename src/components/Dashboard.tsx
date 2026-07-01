@@ -11,7 +11,6 @@ const Dashboard: React.FC = () => {
     selectProject, 
     deleteProject, 
     createProject, 
-    upgradeToPro, 
     exportQueue 
   } = useApp();
 
@@ -62,6 +61,7 @@ const Dashboard: React.FC = () => {
         duration,
         size: sizeStr,
         url: blobUrl,
+        file,
       };
       setImportedVideo(metadata);
       if (!newProjName) {
@@ -71,7 +71,7 @@ const Dashboard: React.FC = () => {
     tempVideo.onerror = () => {
       // Fallback if metadata can't be read
       const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
-      setImportedVideo({ name: file.name, resolution: '1920×1080', fps: 30, duration: 0, size: sizeStr, url: blobUrl });
+      setImportedVideo({ name: file.name, resolution: '1920×1080', fps: 30, duration: 0, size: sizeStr, url: blobUrl, file });
     };
   };
 
@@ -116,23 +116,19 @@ const Dashboard: React.FC = () => {
           <div className="h-8 w-8 rounded bg-white flex items-center justify-center">
             <Camera className="text-black h-4 w-4" />
           </div>
-          <span className="text-lg font-bold text-white tracking-wide">SnapBeauty Studio</span>
+          <span className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+            SnapBeauty Studio
+            <span className="text-[9px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-purple-500/30 translate-y-0.5">
+              Beta
+            </span>
+          </span>
         </div>
 
         <div className="flex items-center gap-4">
-          {user?.isPro ? (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-semibold">
-              <Shield className="h-3.5 w-3.5 fill-yellow-500/10" />
-              <span>PRO Tier Active</span>
-            </div>
-          ) : (
-            <button 
-              onClick={upgradeToPro}
-              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white text-xs font-bold shadow-lg shadow-yellow-500/10 active:scale-[0.98] transition-all"
-            >
-              Upgrade to Pro
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold animate-pulse">
+            <Shield className="h-3.5 w-3.5 fill-purple-500/10" />
+            <span>Full Access Active</span>
+          </div>
 
           <div className="flex items-center gap-3 pl-4 border-l border-white/10">
             <div className="text-right">
@@ -185,10 +181,17 @@ const Dashboard: React.FC = () => {
                   className="hidden"
                 />
                 <div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center text-gray-400 mb-4 shadow-inner">
-                  <Upload className="h-5 w-5" />
+                  <Upload className="h-8 w-8 text-gray-400 mb-3" />
                 </div>
-                <p className="text-sm font-semibold text-white">Drag & drop video clip</p>
-                <p className="text-xs text-gray-400 mt-1 max-w-[200px]">Supports MP4, MOV, AVI, MKV, WEBM</p>
+                <p className="text-sm font-medium text-white mb-1">Click to browse or drag video here</p>
+                <p className="text-xs text-gray-400 mb-3">MP4, WebM up to 4K resolution</p>
+                
+                <div className="flex items-start gap-1.5 text-left bg-yellow-500/10 border border-yellow-500/20 rounded p-2 mt-2 w-full max-w-[280px]">
+                  <Sparkles className="h-3 w-3 text-yellow-500 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-yellow-300/90 leading-tight">
+                    <strong className="text-yellow-400">Beta Version:</strong> SnapBeauty works best with a single, well-lit subject in the frame. Extreme motion may cause tracking artifacts.
+                  </p>
+                </div>
               </div>
 
               {/* Project settings details */}

@@ -1,6 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp, BeautyValues } from '../context/AppContext';
-import { Sparkles, Smile, Eye, User, Brush, Compass, ChevronDown, ChevronUp, Palette, Save, Trash2, Bookmark, Globe, CameraFlash } from 'lucide-react';
+import { Sparkles, Smile, Eye, User, Brush, Compass, ChevronDown, ChevronUp, Palette, Save, Trash2, Bookmark, Globe } from 'lucide-react';
+
+// Extract slider into its own component to obey React Rules of Hooks
+const ProteusSlider = ({ 
+  slider, 
+  globalVal, 
+  updateBeautyValue 
+}: { 
+  slider: { label: string; key: string; min?: number; max?: number }; 
+  globalVal: number; 
+  updateBeautyValue: (k: keyof BeautyValues, v: any) => void; 
+}) => {
+  const [localVal, setLocalVal] = useState(globalVal);
+
+  useEffect(() => { setLocalVal(globalVal); }, [globalVal]);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-[11px] font-medium text-gray-300">
+        <span>{slider.label}</span>
+        <span 
+          onDoubleClick={() => {
+            setLocalVal(0);
+            updateBeautyValue(slider.key as keyof BeautyValues, 0);
+          }}
+          className="text-purple-300 font-mono text-[10px] font-bold cursor-pointer hover:text-white"
+          title="Double-click to reset parameters"
+        >
+          {localVal}%
+        </span>
+      </div>
+      <input
+        type="range"
+        min={slider.min ?? 0}
+        max={slider.max ?? 100}
+        value={localVal}
+        onChange={(e) => setLocalVal(parseInt(e.target.value))}
+        onMouseUp={() => updateBeautyValue(slider.key as keyof BeautyValues, localVal)}
+        className="w-full accent-purple-500 bg-white/10 h-1 rounded-lg cursor-ew-resize"
+      />
+    </div>
+  );
+};
 
 const BeautyControls: React.FC = () => {
   const { beautyValues, updateBeautyValue, savePreset, deletePreset, publishPresetToMarketplace, customPresets, applyPreset } = useApp();
@@ -154,6 +196,26 @@ const BeautyControls: React.FC = () => {
               <SliderRow label="Wrinkle Reduction" valueKey="skinWrinkle" />
               <SliderRow label="Oil & Shine Reduction" valueKey="skinOil" />
               <SliderRow label="Skin Tone Warmth" valueKey="skinTone" />
+              
+              {/* Body Skin Retouching (Chroma-Key) */}
+              <div className="pt-2 border-t border-white/10 mt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-medium text-gray-300">Body Skin Smoothing</span>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="bodySkinColor" className="text-[9px] text-gray-400">Skin Color:</label>
+                    <input 
+                      type="color" 
+                      id="bodySkinColor"
+                      value={beautyValues.bodySkinColor}
+                      onChange={(e) => updateBeautyValue('bodySkinColor', e.target.value)}
+                      className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
+                      title="Select your skin color for body smoothing"
+                    />
+                  </div>
+                </div>
+                <SliderRow label="Smoothing Amount" valueKey="bodySkinRetouch" />
+                <SliderRow label="Color Match Tolerance" valueKey="bodySkinTolerance" />
+              </div>
             </div>
           )}
         </div>
@@ -199,8 +261,9 @@ const BeautyControls: React.FC = () => {
               <SliderRow label="Eye Brightening" valueKey="eyeBrightening" />
               <SliderRow label="Lash & Iris Sharpening" valueKey="eyeSharpening" />
               <SliderRow label="Dark Circle Removal" valueKey="eyeDarkCircle" />
-              <SliderRow label="Eye Enlargement" valueKey="eyeEnlargement" />
+              <SliderRow label="Eye Enlargement" valueKey="eyeEnlargement" min={-100} max={100} />
               <SliderRow label="Iris Highlight Detail" valueKey="eyeIrisDetail" />
+              <SliderRow label="Iris Brightness" valueKey="eyeIrisBrightness" />
               
               {/* Eye Color selector */}
               <div className="space-y-2 pt-1">
@@ -291,7 +354,7 @@ const BeautyControls: React.FC = () => {
           
           {expandedSection === 'lips' && (
             <div className="p-3 border-t border-white/5 bg-studio-dark/30 space-y-4 animate-fade-in">
-              <SliderRow label="Lip Plumpness" valueKey="lipFullness" />
+              <SliderRow label="Lip Plumpness" valueKey="lipFullness" min={-100} max={100} />
               <SliderRow label="Lip Gloss Intensity" valueKey="lipGloss" />
               <SliderRow label="Lip Definition Contour" valueKey="lipDefinition" />
               
@@ -486,6 +549,46 @@ const BeautyControls: React.FC = () => {
               <SliderRow label="Highlight Bloom" valueKey="g7xHighlightBloom" min={0} max={100} />
               <SliderRow label="Cool Cinematic Shadows" valueKey="g7xCoolShadows" min={0} max={100} />
               <SliderRow label="Sensor Grain Injection" valueKey="g7xGrainAmount" min={0} max={100} />
+            </div>
+          )}
+        </div>
+
+        {/* SECTION: Lucid Detail & Enhancements Suite */}
+        <div className="rounded-xl border border-white/5 overflow-hidden bg-white/1">
+          <button 
+            onClick={() => toggleSection('lucid-engine')}
+            className="w-full p-3 flex items-center justify-between text-left hover:bg-white/2 transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <Compass className="h-4 w-4 text-purple-400" />
+              <span className="text-xs font-bold text-white">Lucid Detail & Clarity Engine</span>
+            </div>
+            {expandedSection === 'lucid-engine' ? <ChevronUp className="h-3.5 w-3.5 text-gray-400" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-400" />}
+          </button>
+          
+          {expandedSection === 'lucid-engine' && (
+            <div className="p-3 border-t border-white/5 bg-studio-dark/30 space-y-4 animate-fade-in">
+              {[
+                { label: "Revert Compression", key: "lucidRevertCompression" },
+                { label: "Recover Frame Details", key: "lucidRecoverDetails" },
+                { label: "Micro-Edge Sharpen", key: "lucidSharpen" },
+                { label: "Temporal Noise Reduction", key: "lucidReduceNoise" },
+                { label: "High-Contrast Dehalo", key: "lucidDehalo" },
+                { label: "Anti-Alias / Lens Deblur", key: "lucidAntiAliasDeblur", min: -100, max: 100 },
+                { label: "Add Sensor Noise Grain", key: "lucidAddNoise" }
+              ].map((slider) => {
+                const valueKey = slider.key as keyof BeautyValues;
+                const globalVal = beautyValues[valueKey] as number;
+                
+                return (
+                  <ProteusSlider 
+                    key={slider.key} 
+                    slider={slider} 
+                    globalVal={globalVal} 
+                    updateBeautyValue={updateBeautyValue} 
+                  />
+                );
+              })}
             </div>
           )}
         </div>

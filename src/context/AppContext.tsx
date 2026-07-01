@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 import { DeterministicExporter } from '../services/DeterministicExporter';
 
@@ -9,6 +9,8 @@ export interface User {
   uid: string;
   email: string | null;
   displayName: string | null;
+  photoURL?: string | null;
+  isPro?: boolean;
 }
 
 export interface VideoMetadata {
@@ -18,6 +20,7 @@ export interface VideoMetadata {
   duration: number; // in seconds
   size: string;
   url: string;
+  file?: File;
 }
 
 export interface Project {
@@ -48,7 +51,12 @@ export interface BeautyValues {
   eyeDarkCircle: number;
   eyeEnlargement: number;
   eyeIrisDetail: number;
+  eyeIrisBrightness: number; // 0 to 100
   eyeColor: 'default' | 'blue' | 'green' | 'hazel' | 'gray' | 'violet';
+  
+  bodySkinRetouch: number;
+  bodySkinColor: string;
+  bodySkinTolerance: number;
   
   // Reshaping
   faceSlimming: number;
@@ -112,6 +120,15 @@ export interface BeautyValues {
   g7xHighlightBloom: number; // 0 to 100
   g7xCoolShadows: number; // 0 to 100
   g7xGrainAmount: number; // 0 to 100
+
+  // Detail & Clarity Engine (Proteus Parameters)
+  lucidRevertCompression: number; // 0 to 100
+  lucidRecoverDetails: number;    // 0 to 100
+  lucidSharpen: number;           // 0 to 100
+  lucidReduceNoise: number;       // 0 to 100
+  lucidDehalo: number;            // 0 to 100
+  lucidAntiAliasDeblur: number;   // -100 to 100
+  lucidAddNoise: number;          // 0 to 100
 }
 
 export interface TimelineClip {
@@ -126,9 +143,10 @@ export interface ExportItem {
   id: string;
   projectName: string;
   progress: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'encoding' | 'completed' | 'failed';
   resolution: string;
   format: string;
+  downloadUrl?: string;
 }
 
 export interface Lens {
@@ -158,6 +176,7 @@ interface AppContextType {
   isPlaying: boolean;
   zoomLevel: number;
   exportQueue: ExportItem[];
+  updateExportProgress: (id: string, progress: number, status?: ExportItem['status'], url?: string) => void;
   showExportModal: boolean;
   marketplaceLenses: Lens[];
   
@@ -212,7 +231,11 @@ const defaultBeautyValues: BeautyValues = {
   eyeDarkCircle: 0,
   eyeEnlargement: 0,
   eyeIrisDetail: 0,
+  eyeIrisBrightness: 0,
   eyeColor: 'default',
+  bodySkinRetouch: 0,
+  bodySkinColor: '#d29985',
+  bodySkinTolerance: 50,
   faceSlimming: 0,
   faceJawline: 0,
   faceCheek: 0,
@@ -262,6 +285,14 @@ const defaultBeautyValues: BeautyValues = {
   g7xHighlightBloom: 0,
   g7xCoolShadows: 0,
   g7xGrainAmount: 0,
+  
+  lucidRevertCompression: 0,
+  lucidRecoverDetails: 0,
+  lucidSharpen: 0,
+  lucidReduceNoise: 0,
+  lucidDehalo: 0,
+  lucidAntiAliasDeblur: 0,
+  lucidAddNoise: 0,
 };
 
 const presets: Record<string, Partial<BeautyValues>> = {
@@ -363,9 +394,9 @@ const presets: Record<string, Partial<BeautyValues>> = {
 
 const initialLenses: Lens[] = [
   { id: '1', name: 'Angelic Glow', creator: 'Sophia Rose', rating: 4.8, reviewsCount: 342, downloads: '12.4K', price: 'Free', category: 'featured', imageUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80', isDownloaded: true },
-  { id: '2', name: 'Cyberpunk Neon', creator: 'X-Studio', rating: 4.9, reviewsCount: 189, downloads: '8.2K', price: '$2.99', category: 'featured', imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80', isDownloaded: false },
+  { id: '2', name: 'Cyberpunk Neon', creator: 'X-Studio', rating: 4.9, reviewsCount: 189, downloads: '8.2K', price: 'Free', category: 'featured', imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80', isDownloaded: false },
   { id: '3', name: 'Korean Dewy Skin', creator: 'Park Ji-Woo', rating: 4.7, reviewsCount: 890, downloads: '45.1K', price: 'Free', category: 'trending', imageUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80', isDownloaded: false },
-  { id: '4', name: 'Hollywood Matte', creator: 'Elite Lenses', rating: 4.6, reviewsCount: 145, downloads: '5.1K', price: '$4.99', category: 'trending', imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80', isDownloaded: false },
+  { id: '4', name: 'Hollywood Matte', creator: 'Elite Lenses', rating: 4.6, reviewsCount: 145, downloads: '5.1K', price: 'Free', category: 'trending', imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80', isDownloaded: false },
   { id: '5', name: 'Sunset Bronze', creator: 'Clara Bella', rating: 4.9, reviewsCount: 52, downloads: '1.2K', price: 'Free', category: 'new', imageUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80', isDownloaded: false },
   { id: '6', name: 'Vampire Glint', creator: 'GothTech', rating: 4.4, reviewsCount: 28, downloads: '680', price: 'Free', category: 'new', imageUrl: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=300&q=80', isDownloaded: false },
 ];
@@ -417,7 +448,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     return onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        setUser({ uid: firebaseUser.uid, email: firebaseUser.email, displayName: firebaseUser.displayName });
+        setUser({ uid: firebaseUser.uid, email: firebaseUser.email, displayName: firebaseUser.displayName, isPro: true });
         setCurrentView('dashboard');
         
         // Sync presets from Firestore
@@ -487,8 +518,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Authentication Operations
-  const login = (email: string) => { /* Logic integrated via Firebase */ };
-  const register = (email: string) => { /* Logic integrated via Firebase */ };
+  const login = (_email: string) => { /* Logic integrated via Firebase */ };
+  const register = (_email: string) => { /* Logic integrated via Firebase */ };
   const logout = () => { signOut(auth); };
   const upgradeToPro = () => { if (user) setUser({ ...user, isPro: true }); };
 
@@ -735,6 +766,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 500);
   };
 
+  const updateExportProgress = (id: string, progress: number, status?: ExportItem['status'], url?: string) => {
+    setExportQueue(prev =>
+      prev.map(item => {
+        if (item.id === id) {
+          return {
+            ...item,
+            progress,
+            status: status || item.status,
+            downloadUrl: url !== undefined ? url : item.downloadUrl
+          };
+        }
+        return item;
+      })
+    );
+  };
+
   // Lens Marketplace download
   const downloadLens = (lensId: string) => {
     setMarketplaceLenses(prev => 
@@ -743,7 +790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Real export: captures deterministic video using WebCodecs
-  const startExportRecording = (resolution: string, format: string, bitrateLevel: string = 'high') => {
+  const startExportRecording = (resolution: string, format: string, _bitrateLevel: string = 'high') => {
     if (!activeProject) return;
     const video = exportVideoRef.current;
 
@@ -786,6 +833,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fps: 30, // Locked to 30fps for stable quality
         sourceStart,
         sourceEnd,
+        sourceFile: activeProject.video?.file,
         onProgress: (pct) => {
           setExportQueue(prev =>
             prev.map(item => item.id === newExport.id ? { ...item, progress: Math.floor(pct) } : item)
@@ -812,6 +860,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (!originalPaused) video.play();
         },
         onError: (err) => {
+          console.error("Export failure:", err);
           setExportQueue(prev =>
             prev.map(item => item.id === newExport.id ? { ...item, status: 'failed' } : item)
           );
@@ -873,6 +922,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       exportVideoRef,
       isExporting,
       exportResolution,
+      updateExportProgress,
+      login,
+      register,
+      upgradeToPro,
     }}>
       {children}
     </AppContext.Provider>

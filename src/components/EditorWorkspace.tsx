@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, BeautyValues } from '../context/AppContext';
 import Visualizer from './Visualizer';
 import BeautyControls from './BeautyControls';
 import Timeline from './Timeline';
@@ -21,7 +21,6 @@ const EditorWorkspace: React.FC = () => {
     isAutoBeautifyActive, 
     toggleAutoBeautify, 
     setShowExportModal,
-    user,
     exportQueue
   } = useApp();
 
@@ -49,6 +48,9 @@ const EditorWorkspace: React.FC = () => {
             <Video className="h-4 w-4 text-purple-400" />
             <span className="text-xs font-bold text-white max-w-[200px] truncate">
               {activeProject?.name || 'Project Workspace'}
+            </span>
+            <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide border border-purple-500/30">
+              Beta
             </span>
             {activeProject?.video?.resolution && (
               <span className="text-[9px] bg-white/5 px-1.5 py-0.5 rounded text-gray-400 font-medium">
@@ -94,11 +96,9 @@ const EditorWorkspace: React.FC = () => {
 
         {/* Right Side: Pro badge and Export */}
         <div className="flex items-center gap-3">
-          {user?.isPro && (
-            <span className="text-[9px] bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wider">
-              Pro Export
-            </span>
-          )}
+          <span className="text-[9px] bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wider">
+            Premium Mode
+          </span>
           <button 
             onClick={() => setShowExportModal(true)}
             className="h-8 px-4 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-purple-500/10 active:scale-[0.97] transition-all"

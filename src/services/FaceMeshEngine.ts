@@ -93,14 +93,23 @@ class FaceMeshEngine {
     }
   }
 
-  async processFrame(video: HTMLVideoElement, timestamp: number): Promise<FaceMeshResult | null> {
+  private lastMpTimestamp = -1;
+
+  async processFrame(video: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas, timestamp: number): Promise<FaceMeshResult | null> {
     if (this.status !== 'ready' || !this.landmarker) return null;
     if (this.isBusy) return null;
 
     this.isBusy = true;
 
     try {
-      const result = this.landmarker.detectForVideo(video, timestamp);
+      // Ensure strictly monotonically increasing timestamps for MediaPipe graph to prevent Packet timestamp mismatch errors.
+      let mpTimestamp = Math.max(0, Math.round(timestamp));
+      if (mpTimestamp <= this.lastMpTimestamp) {
+        mpTimestamp = this.lastMpTimestamp + 30; // nominal 30ms step to simulate a ~33fps frame progression
+      }
+      this.lastMpTimestamp = mpTimestamp;
+
+      const result = this.landmarker.detectForVideo(video, mpTimestamp);
       if (result.faceLandmarks && result.faceLandmarks.length > 0) {
         this.lastLandmarks = result.faceLandmarks[0];
         const mesh = this.lastLandmarks;
@@ -118,7 +127,7 @@ class FaceMeshEngine {
       }
 
       if (this.segmenter && this.lastLandmarks) {
-        const segResult = this.segmenter.segmentForVideo(video, timestamp);
+        const segResult = this.segmenter.segmentForVideo(video, mpTimestamp);
         if (segResult && segResult.categoryMask) {
           const mask = segResult.categoryMask;
           this.lastMaskSize.w = mask.width;
@@ -162,6 +171,7 @@ class FaceMeshEngine {
     }
     this.status = 'idle';
     this.isBusy = false;
+    this.lastMpTimestamp = -1;
   }
 }
 

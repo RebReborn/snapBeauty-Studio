@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Shield, Lock, Cpu, Sparkles } from 'lucide-react';
+import { X, Shield, Cpu, Sparkles } from 'lucide-react';
 
 const ExportModal: React.FC = () => {
   const { 
     activeProject, 
-    user, 
-    upgradeToPro, 
     startExportRecording,
     setShowExportModal 
   } = useApp();
@@ -18,15 +16,7 @@ const ExportModal: React.FC = () => {
   const [removeWatermark, setRemoveWatermark] = useState(false);
   const [batchExport, setBatchExport] = useState(false);
 
-  const isPro = user?.isPro || false;
-
   const handleExportClick = () => {
-    const isProFeature = resolution === '4K' || resolution === '1440p' || removeWatermark || batchExport;
-    if (isProFeature && !isPro) {
-      alert('This setting requires a PRO Subscription. Upgrading account...');
-      upgradeToPro();
-      return;
-    }
     // Kick off real canvas-stream recording
     startExportRecording(resolution, format, bitrate);
   };
@@ -71,10 +61,10 @@ const ExportModal: React.FC = () => {
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Output Resolution</label>
               <div className="grid grid-cols-4 gap-2 text-xs">
                 {[
-                  { id: '720p', label: '720p HD', isProOnly: false },
-                  { id: '1080p', label: '1080p FHD', isProOnly: false },
-                  { id: '1440p', label: '1440p QHD', isProOnly: true },
-                  { id: '4K', label: '4K UltraHD', isProOnly: true }
+                  { id: '720p', label: '720p HD' },
+                  { id: '1080p', label: '1080p FHD' },
+                  { id: '1440p', label: '1440p QHD' },
+                  { id: '4K', label: '4K UltraHD' }
                 ].map((res) => (
                   <button
                     key={res.id}
@@ -86,11 +76,6 @@ const ExportModal: React.FC = () => {
                     }`}
                   >
                     <span>{res.label}</span>
-                    {res.isProOnly && (
-                      <div className="flex items-center gap-0.5 text-[8px] text-yellow-400 font-bold bg-yellow-500/10 px-1 py-0.2 rounded">
-                        {isPro ? 'Pro' : <Lock className="h-2 w-2" />}
-                      </div>
-                    )}
                   </button>
                 ))}
               </div>
@@ -166,15 +151,7 @@ const ExportModal: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Shield className="h-4 w-4 text-purple-400" />
                   <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-white">Remove SnapBeauty Watermark</p>
-                      {!isPro && (
-                        <div className="flex items-center gap-0.5 text-[8px] text-yellow-400 font-bold bg-yellow-500/10 px-1 py-0.2 rounded">
-                          <Lock className="h-2 w-2" />
-                          <span>Pro</span>
-                        </div>
-                      )}
-                    </div>
+                    <p className="font-semibold text-white">Remove SnapBeauty Watermark</p>
                     <p className="text-[9px] text-gray-400">Export clean files without logos</p>
                   </div>
                 </div>
@@ -192,15 +169,7 @@ const ExportModal: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Cpu className="h-4 w-4 text-purple-400" />
                   <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-white">Batch Export Clips</p>
-                      {!isPro && (
-                        <div className="flex items-center gap-0.5 text-[8px] text-yellow-400 font-bold bg-yellow-500/10 px-1 py-0.2 rounded">
-                          <Lock className="h-2 w-2" />
-                          <span>Pro</span>
-                        </div>
-                      )}
-                    </div>
+                    <p className="font-semibold text-white">Batch Export Clips</p>
                     <p className="text-[9px] text-gray-400">Render all timeline sequences at once</p>
                   </div>
                 </div>

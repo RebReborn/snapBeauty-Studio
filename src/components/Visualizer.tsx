@@ -265,6 +265,7 @@ const Visualizer: React.FC = () => {
   const [showBox,        setShowBox]        = useState(true);
   const [showCompare,    setShowCompare]    = useState(false);
   const [previewQuality, setPreviewQuality] = useState<'low' | 'med' | 'high'>('high');
+  const [viewerZoom,     setViewerZoom]     = useState(100);
   const [fps,            setFps]            = useState(0);
   const [split,          setSplit]          = useState(0.5);
   const [draggingSplit,  setDraggingSplit]  = useState(false);
@@ -325,7 +326,6 @@ const Visualizer: React.FC = () => {
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
 
-      const engineReady = faceMeshEngine.status === 'ready';
       const engineStatus = faceMeshEngine.status;
 
       if (engineStatus === 'loading' || engineStatus === 'idle') {
@@ -486,12 +486,6 @@ const Visualizer: React.FC = () => {
     const ratio = vw / vh;
     
     if (isExporting) {
-      let targetW = 1280;
-      if (exportResolution === '1080p') targetW = 1920;
-      else if (exportResolution === '1440p') targetW = 2560;
-      else if (exportResolution === '4K') targetW = 3840;
-      else targetW = 1280; // 720p output width is usually 1280x720, wait! 720p HD means height is 720! Width is 1280.
-      
       // Let's set dimensions by height for standard progressive formats
       let targetH = 720;
       if (exportResolution === '1080p') targetH = 1080;
@@ -708,21 +702,32 @@ const Visualizer: React.FC = () => {
       </div>
 
       {/* ── Canvas ── */}
-      <div className="flex-1 flex items-center justify-center py-2 relative z-0 min-h-0">
-        <canvas
-          ref={canvasRef}
-          width={canvasSize.w}
-          height={canvasSize.h}
-          className="rounded-xl border border-white/10 shadow-2xl shadow-black/60 max-w-full max-h-full object-contain"
-        />
-        {/* Split drag zone */}
-        {showCompare && (
-          <div
-            onMouseDown={() => setDraggingSplit(true)}
-            className="absolute inset-y-2 w-9 z-20"
-            style={{ left: `calc(${split * 100}% - 18px)`, cursor: 'ew-resize' }}
+      <div className="flex-1 overflow-auto p-2 relative z-0 min-h-0 flex custom-scrollbar">
+        <div 
+          className="m-auto relative transition-all duration-200 flex items-center justify-center"
+          style={{ 
+            width: viewerZoom > 100 ? `${viewerZoom}%` : '100%', 
+            height: viewerZoom > 100 ? `${viewerZoom}%` : '100%',
+            minWidth: '100%',
+            minHeight: '100%'
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            width={canvasSize.w}
+            height={canvasSize.h}
+            className="rounded-xl border border-white/10 shadow-2xl shadow-black/60 object-contain max-w-full max-h-full"
+            style={{ width: '100%', height: '100%' }}
           />
-        )}
+          {/* Split drag zone */}
+          {showCompare && (
+            <div
+              onMouseDown={() => setDraggingSplit(true)}
+              className="absolute inset-y-2 w-9 z-20"
+              style={{ left: `calc(${split * 100}% - 18px)`, cursor: 'ew-resize' }}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── Transport controls ── */}
@@ -785,8 +790,25 @@ const Visualizer: React.FC = () => {
             </button>
           </div>
 
-          {/* Quality + fullscreen */}
+          {/* Quality + Zoom + fullscreen */}
           <div className="flex items-center gap-2">
+            {/* Zoom Controls */}
+            <div className="flex items-center bg-white/5 border border-white/5 rounded-lg px-2 py-0.5">
+              <button 
+                onClick={() => setViewerZoom(z => Math.max(25, z - 25))} 
+                className="text-gray-400 hover:text-white px-1 font-bold active:scale-95"
+              >
+                -
+              </button>
+              <span className="text-[10px] text-white font-mono w-10 text-center">{viewerZoom}%</span>
+              <button 
+                onClick={() => setViewerZoom(z => Math.min(400, z + 25))} 
+                className="text-gray-400 hover:text-white px-1 font-bold active:scale-95"
+              >
+                +
+              </button>
+            </div>
+
             <div className="flex bg-white/5 border border-white/5 rounded-lg p-0.5">
               {(['low', 'med', 'high'] as const).map(q => (
                 <button

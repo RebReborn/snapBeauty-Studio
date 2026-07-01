@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Download, Check, Star, Search } from 'lucide-react';
 
 const Marketplace: React.FC = () => {
-  const { marketplaceLenses, downloadLens, user, applyPreset } = useApp();
+  const { marketplaceLenses, downloadLens, applyPreset } = useApp();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'featured' | 'trending' | 'new'>('featured');
@@ -98,7 +98,7 @@ const Marketplace: React.FC = () => {
 
                 {/* Purchase / Download Button */}
                 <div className="flex items-center justify-between mt-1 pt-1 border-t border-white/5">
-                  <span className="text-[10px] font-extrabold text-white font-mono">{lens.price}</span>
+                  <span className="text-[10px] font-extrabold text-purple-400 font-mono">Free</span>
                   
                   {lens.isDownloaded ? (
                     <div className="flex items-center gap-1 text-[9px] text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
@@ -108,16 +108,10 @@ const Marketplace: React.FC = () => {
                   ) : (
                     <button
                       onClick={() => handleDownload(lens.id)}
-                      className={`px-3 py-1 rounded text-[9px] font-extrabold flex items-center gap-1 transition-all ${
-                        lens.price === 'Free' 
-                          ? 'bg-purple-500 hover:bg-purple-600 text-white' 
-                          : user?.isPro 
-                          ? 'bg-yellow-500 hover:bg-yellow-600 text-white' // Free for Pro members
-                          : 'bg-white/5 hover:bg-white/10 text-gray-400 border border-white/10'
-                      }`}
+                      className="px-3 py-1 rounded text-[9px] font-extrabold flex items-center gap-1 transition-all bg-purple-500 hover:bg-purple-600 text-white"
                     >
                       <Download className="h-2.5 w-2.5" />
-                      <span>{lens.price === 'Free' ? 'Install' : (user?.isPro ? 'Get (Pro)' : 'Buy')}</span>
+                      <span>Install</span>
                     </button>
                   )}
                 </div>

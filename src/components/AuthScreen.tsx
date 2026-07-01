@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
 import { Camera, Mail, Lock, ArrowRight, UserPlus } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import LegalModal from './LegalModal';
 
 const AuthScreen: React.FC = () => {
-  const { login, register } = useApp();
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -74,7 +72,12 @@ const AuthScreen: React.FC = () => {
             <div className="h-8 w-8 rounded bg-white flex items-center justify-center">
               <Camera className="text-black h-4 w-4" />
             </div>
-            <span className="text-lg font-bold text-white tracking-wide">SnapBeauty Studio</span>
+            <span className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+              SnapBeauty Studio
+              <span className="text-[9px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-purple-500/30 translate-y-0.5">
+                Beta
+              </span>
+            </span>
           </div>
 
           <div className="my-auto space-y-6">

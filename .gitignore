@@ -5,3 +5,9 @@ build/
 .DS_Store
 
 .env.local
+
+# Firebase
+.firebase/
+firebase-debug.log*
+ui-debug.log*
+
