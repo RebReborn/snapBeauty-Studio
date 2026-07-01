@@ -452,10 +452,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentView('dashboard');
         
         // Sync presets from Firestore
-        const docRef = doc(db, 'users', firebaseUser.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().customPresets) {
-          setCustomPresets(docSnap.data().customPresets);
+        try {
+          const docRef = doc(db, 'users', firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists() && docSnap.data().customPresets) {
+            setCustomPresets(docSnap.data().customPresets);
+          }
+        } catch (error) {
+          console.warn("Failed to sync presets from Firestore (client offline):", error);
         }
       } else {
         setUser(null);
@@ -582,7 +586,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newPresets = { ...customPresets, [presetName]: { ...beautyValues } };
     setCustomPresets(newPresets);
     if (user) {
-      await setDoc(doc(db, 'users', user.uid), { customPresets: newPresets }, { merge: true });
+      try {
+        await setDoc(doc(db, 'users', user.uid), { customPresets: newPresets }, { merge: true });
+      } catch (error) {
+        console.warn("Failed to save preset to Firestore (offline mode active):", error);
+      }
     }
   };
 
@@ -591,7 +599,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     delete newPresets[presetName];
     setCustomPresets(newPresets);
     if (user) {
-      await setDoc(doc(db, 'users', user.uid), { customPresets: newPresets }, { merge: true });
+      try {
+        await setDoc(doc(db, 'users', user.uid), { customPresets: newPresets }, { merge: true });
+      } catch (error) {
+        console.warn("Failed to delete preset from Firestore (offline mode active):", error);
+      }
     }
     if (activePreset === presetName) {
       setActivePreset('None');
@@ -617,8 +629,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       values: presetValues
     };
     
-    await setDoc(doc(collection(db, 'lenses')), newLens);
-    alert(`Successfully published "${presetName}" to the global marketplace!`);
+    try {
+      await setDoc(doc(collection(db, 'lenses')), newLens);
+      alert(`Successfully published "${presetName}" to the global marketplace!`);
+    } catch (error) {
+      console.error("Failed to publish preset to marketplace:", error);
+      alert(`Failed to publish "${presetName}" (please check your network connection).`);
+    }
   };
 
   // Auto Beautify AI Toggle
