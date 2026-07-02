@@ -246,132 +246,141 @@ const Timeline: React.FC = () => {
 
       </div>
 
-      {/* Tracks & Ruler container */}
-      <div 
-        onClick={() => setSelectedClipId(null)}
-        className="flex-1 overflow-x-auto overflow-y-hidden flex flex-col relative"
-      >
+      {/* Main Timeline Workspace (Split columns) */}
+      <div className="flex-1 flex overflow-hidden">
         
-        {/* Grid Background */}
-        <div 
-          className="absolute inset-0 timeline-track-bg pointer-events-none"
-          style={{ width: `${timelineWidth}px` }}
-        />
-
-        {/* 1. Time Ruler Header */}
-        <div 
-          ref={rulerRef}
-          onMouseDown={handleMouseDown}
-          className="h-6 bg-[#0f0f13] border-b border-white/5 relative cursor-ew-resize select-none shrink-0"
-          style={{ width: `${timelineWidth}px` }}
-        >
-          {renderRulerTicks()}
-        </div>
-
-        {/* Tracks Content Box */}
-        <div className="flex-1 flex flex-col justify-center py-2 relative min-h-0">
+        {/* Left Column: Fixed Track Headers (Sidebar) */}
+        <div className="w-12 bg-[#0e0e12]/95 border-r border-white/5 flex flex-col shrink-0 select-none">
+          {/* Ruler Corner Spacer */}
+          <div className="h-6 bg-[#0f0f13] border-b border-white/5 shrink-0" />
           
-          {/* Track 1: Video */}
-          <div className="h-[60px] border-b border-white/5 flex items-center relative py-1 bg-black/10">
-            
-            {/* Track Name label */}
-            <div className="sticky left-0 h-full w-12 bg-[#0e0e12]/95 border-r border-white/5 flex items-center justify-center text-gray-400 z-10 shrink-0">
+          {/* Tracks Labels Container (vertical matching) */}
+          <div className="flex-1 flex flex-col justify-center py-2 min-h-0">
+            {/* Video Label */}
+            <div className="h-[60px] border-b border-white/5 flex items-center justify-center text-gray-400">
               <Video className="h-4 w-4" />
             </div>
+            {/* Audio Label */}
+            <div className="h-[45px] flex items-center justify-center text-gray-400">
+              <Volume2 className="h-4 w-4" />
+            </div>
+          </div>
+        </div>
 
-            {/* Video Clips layout */}
-            <div className="h-full relative flex-1">
-              {timelineClips.map((clip) => {
-                const isSelected = selectedClipId === clip.id;
-                return (
+        {/* Right Column: Scrollable Tracks & Ruler */}
+        <div 
+          onClick={() => setSelectedClipId(null)}
+          className="flex-1 overflow-x-auto overflow-y-hidden flex flex-col relative"
+        >
+          
+          {/* Grid Background */}
+          <div 
+            className="absolute inset-0 timeline-track-bg pointer-events-none"
+            style={{ width: `${timelineWidth}px` }}
+          />
+
+          {/* 1. Time Ruler Header */}
+          <div 
+            ref={rulerRef}
+            onMouseDown={handleMouseDown}
+            className="h-6 bg-[#0f0f13] border-b border-white/5 relative cursor-ew-resize select-none shrink-0"
+            style={{ width: `${timelineWidth}px` }}
+          >
+            {renderRulerTicks()}
+          </div>
+
+          {/* Tracks Content Box */}
+          <div className="flex-1 flex flex-col justify-center py-2 relative min-h-0">
+            
+            {/* Track 1: Video */}
+            <div className="h-[60px] border-b border-white/5 relative py-1 bg-black/10">
+              {/* Video Clips layout */}
+              <div className="h-full relative w-full">
+                {timelineClips.map((clip) => {
+                  const isSelected = selectedClipId === clip.id;
+                  return (
+                    <div
+                      key={clip.id}
+                      onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); }}
+                      onMouseDown={(e) => handleClipDrag(clip.id, e)}
+                      className={`absolute h-full rounded-lg overflow-hidden flex items-center justify-between p-2 select-none group cursor-pointer transition-all ${
+                        isSelected 
+                          ? 'bg-gradient-to-r from-purple-800/80 to-pink-800/80 border-2 border-purple-400 shadow-lg shadow-purple-500/20 z-20 scale-[0.98]' 
+                          : 'bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/20 hover:border-purple-500/40 z-10'
+                      }`}
+                      style={{
+                        left: `${clip.start * pxPerSec}px`,
+                        width: `${(clip.end - clip.start) * pxPerSec}px`,
+                      }}
+                    >
+                      {/* Left Trim Handle */}
+                      <div 
+                        onMouseDown={(e) => handleTrimStart(clip.id, e)}
+                        className="absolute left-0 top-0 bottom-0 w-2.5 bg-purple-500/70 cursor-w-resize rounded-l-md hover:bg-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      />
+
+                      {/* Clip Label */}
+                      <div className="text-[10px] font-semibold text-white px-2 truncate leading-tight select-none">
+                        {activeProject?.video?.name || 'video_layer.mp4'} 
+                        <span className="text-gray-400 font-normal ml-1">
+                          [src: {formatTimeText(clip.sourceStart)} - {formatTimeText(clip.sourceEnd)}]
+                        </span>
+                      </div>
+
+                      {/* Right Trim Handle */}
+                      <div 
+                        onMouseDown={(e) => handleTrimEnd(clip.id, e)}
+                        className="absolute right-0 top-0 bottom-0 w-2.5 bg-purple-500/70 cursor-e-resize rounded-r-md hover:bg-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Track 2: Audio */}
+            <div className="h-[45px] relative py-1 bg-black/10">
+              {/* Audio Clips layout (Waveform simulation) */}
+              <div className="h-full relative w-full">
+                {audioTrackClips.map((clip) => (
                   <div
                     key={clip.id}
-                    onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); }}
-                    onMouseDown={(e) => handleClipDrag(clip.id, e)}
-                    className={`absolute h-full rounded-lg overflow-hidden flex items-center justify-between p-2 select-none group cursor-pointer transition-all ${
-                      isSelected 
-                        ? 'bg-gradient-to-r from-purple-800/80 to-pink-800/80 border-2 border-purple-400 shadow-lg shadow-purple-500/20 z-20 scale-[0.98]' 
-                        : 'bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/20 hover:border-purple-500/40 z-10'
-                    }`}
+                    className="absolute h-[32px] top-1 rounded-lg bg-teal-950/40 border border-teal-500/20 overflow-hidden flex items-center justify-between p-1 select-none"
                     style={{
                       left: `${clip.start * pxPerSec}px`,
                       width: `${(clip.end - clip.start) * pxPerSec}px`,
                     }}
                   >
-                    {/* Left Trim Handle */}
-                    <div 
-                      onMouseDown={(e) => handleTrimStart(clip.id, e)}
-                      className="absolute left-0 top-0 bottom-0 w-2.5 bg-purple-500/70 cursor-w-resize rounded-l-md hover:bg-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                    />
-
-                    {/* Clip Label */}
-                    <div className="text-[10px] font-semibold text-white px-2 truncate leading-tight select-none">
-                      {activeProject?.video?.name || 'video_layer.mp4'} 
-                      <span className="text-gray-400 font-normal ml-1">
-                        [src: {formatTimeText(clip.sourceStart)} - {formatTimeText(clip.sourceEnd)}]
-                      </span>
+                    {/* Simulated Waveform SVG */}
+                    <div className="w-full h-full flex items-center gap-[2px] px-2 opacity-50">
+                      {Array.from({ length: Math.ceil((clip.end - clip.start) * pxPerSec / 8) }).map((_, i) => (
+                        <div 
+                          key={i} 
+                          className="w-[3px] bg-teal-400 rounded-full" 
+                          style={{ height: `${20 + Math.sin(i * 0.4) * 12 + (i % 3 === 0 ? 5 : 0)}%` }}
+                        />
+                      ))}
                     </div>
 
-                    {/* Right Trim Handle */}
-                    <div 
-                      onMouseDown={(e) => handleTrimEnd(clip.id, e)}
-                      className="absolute right-0 top-0 bottom-0 w-2.5 bg-purple-500/70 cursor-e-resize rounded-r-md hover:bg-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                    />
+                    <div className="absolute left-3 text-[8px] font-semibold text-teal-300 select-none">
+                      Audio Track (Stereo)
+                    </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
 
           </div>
 
-          {/* Track 2: Audio */}
-          <div className="h-[45px] flex items-center relative py-1 bg-black/10">
-            
-            {/* Track Name label */}
-            <div className="sticky left-0 h-full w-12 bg-[#0e0e12]/95 border-r border-white/5 flex items-center justify-center text-gray-400 z-10 shrink-0">
-              <Volume2 className="h-4 w-4" />
-            </div>
-
-            {/* Audio Clips layout (Waveform simulation) */}
-            <div className="h-full relative flex-1">
-              {audioTrackClips.map((clip) => (
-                <div
-                  key={clip.id}
-                  className="absolute h-[32px] top-1 rounded-lg bg-teal-950/40 border border-teal-500/20 overflow-hidden flex items-center justify-between p-1 select-none"
-                  style={{
-                    left: `${clip.start * pxPerSec}px`,
-                    width: `${(clip.end - clip.start) * pxPerSec}px`,
-                  }}
-                >
-                  {/* Simulated Waveform SVG */}
-                  <div className="w-full h-full flex items-center gap-[2px] px-2 opacity-50">
-                    {Array.from({ length: Math.ceil((clip.end - clip.start) * pxPerSec / 8) }).map((_, i) => (
-                      <div 
-                        key={i} 
-                        className="w-[3px] bg-teal-400 rounded-full" 
-                        style={{ height: `${20 + Math.sin(i * 0.4) * 12 + (i % 3 === 0 ? 5 : 0)}%` }}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="absolute left-3 text-[8px] font-semibold text-teal-300 select-none">
-                    Audio Track (Stereo)
-                  </div>
-                </div>
-              ))}
-            </div>
-
+          {/* 3. Scrubbing Vertical Playhead */}
+          <div 
+            className="absolute top-0 bottom-0 w-[2px] bg-purple-500 z-30 pointer-events-none"
+            style={{ left: `${playheadPosition * pxPerSec}px` }}
+          >
+            {/* Scrubber pin top handle */}
+            <div className="absolute top-0 -left-[5px] h-3 w-3 rounded-full bg-purple-500 border border-white shadow shadow-purple-500/80" />
           </div>
 
-        </div>
-
-        {/* 3. Scrubbing Vertical Playhead */}
-        <div 
-          className="absolute top-0 bottom-0 w-[2px] bg-purple-500 z-30 pointer-events-none"
-          style={{ left: `${playheadPosition * pxPerSec}px` }}
-        >
-          {/* Scrubber pin top handle */}
-          <div className="absolute top-0 -left-[5px] h-3 w-3 rounded-full bg-purple-500 border border-white shadow shadow-purple-500/80" />
         </div>
 
       </div>
