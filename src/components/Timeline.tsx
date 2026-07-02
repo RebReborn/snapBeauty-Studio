@@ -16,6 +16,7 @@ const Timeline: React.FC = () => {
     setIsPlaying, 
     splitClip, 
     trimClip,
+    moveClip,
     zoomLevel, 
     setZoomLevel,
     selectedClipId,
@@ -115,6 +116,30 @@ const Timeline: React.FC = () => {
     window.addEventListener('mouseup', onMouseUp);
   };
 
+  const handleClipDrag = (clipId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    
+    const startX = e.clientX;
+    const clip = timelineClips.find(c => c.id === clipId);
+    if (!clip) return;
+    const initialStart = clip.start;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaPx = moveEvent.clientX - startX;
+      const deltaSec = deltaPx / pxPerSec;
+      moveClip(clipId, initialStart + deltaSec);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
   // Build vertical ruler markers (ticks every 1, 5 or 10 seconds depending on zoom)
   const renderRulerTicks = () => {
     const ticks = [];
@@ -201,7 +226,10 @@ const Timeline: React.FC = () => {
 
         {/* Zoom Scrubber controls */}
         <div className="flex items-center gap-3">
-          <ZoomOut className="h-3.5 w-3.5 text-gray-500" />
+          <ZoomOut 
+            onClick={() => setZoomLevel(Math.max(10, zoomLevel - 10))}
+            className="h-3.5 w-3.5 text-gray-400 hover:text-white cursor-pointer transition-colors" 
+          />
           <input
             type="range"
             min="10"
@@ -210,7 +238,10 @@ const Timeline: React.FC = () => {
             onChange={(e) => setZoomLevel(parseInt(e.target.value))}
             className="w-32 accent-purple-400"
           />
-          <ZoomIn className="h-3.5 w-3.5 text-gray-500" />
+          <ZoomIn 
+            onClick={() => setZoomLevel(Math.min(100, zoomLevel + 10))}
+            className="h-3.5 w-3.5 text-gray-400 hover:text-white cursor-pointer transition-colors" 
+          />
         </div>
 
       </div>
@@ -256,6 +287,7 @@ const Timeline: React.FC = () => {
                   <div
                     key={clip.id}
                     onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); }}
+                    onMouseDown={(e) => handleClipDrag(clip.id, e)}
                     className={`absolute h-full rounded-lg overflow-hidden flex items-center justify-between p-2 select-none group cursor-pointer transition-all ${
                       isSelected 
                         ? 'bg-gradient-to-r from-purple-800/80 to-pink-800/80 border-2 border-purple-400 shadow-lg shadow-purple-500/20 z-20 scale-[0.98]' 

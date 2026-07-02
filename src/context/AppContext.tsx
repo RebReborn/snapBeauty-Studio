@@ -207,6 +207,7 @@ interface AppContextType {
   toggleAutoBeautify: () => void;
   splitClip: () => void;
   trimClip: (clipId: string, side: 'start' | 'end', delta: number) => void;
+  moveClip: (clipId: string, newStart: number) => void;
   setPlayheadPosition: (seconds: number) => void;
   setIsPlaying: (playing: boolean) => void;
   setZoomLevel: (level: number) => void;
@@ -807,6 +808,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToHistory(beautyValues, newClips);
   };
 
+  const moveClip = (clipId: string, newStart: number) => {
+    const idx = timelineClips.findIndex(c => c.id === clipId);
+    if (idx === -1) return;
+    const clip = timelineClips[idx];
+    const duration = clip.end - clip.start;
+
+    // Calculate neighbors to avoid overlap
+    const prevClip = idx > 0 ? timelineClips[idx - 1] : null;
+    const nextClip = idx < timelineClips.length - 1 ? timelineClips[idx + 1] : null;
+
+    const minStart = prevClip ? prevClip.end : 0;
+    const maxEnd = nextClip ? nextClip.start : (activeProject?.video?.duration || 100);
+
+    // Clamp new start to avoid overlapping or out-of-bound shifts
+    const clampedStart = Math.max(minStart, Math.min(newStart, maxEnd - duration));
+    const clampedEnd = clampedStart + duration;
+
+    const updatedClips = timelineClips.map(c => 
+      c.id === clipId ? { ...c, start: clampedStart, end: clampedEnd } : c
+    );
+    setTimelineClips(updatedClips);
+
+    // Mirror to audio track clips in lockstep
+    const updatedAudio = audioTrackClips.map((a, i) => 
+      i === idx ? { ...a, start: clampedStart, end: clampedEnd } : a
+    );
+    setAudioTrackClips(updatedAudio);
+
+    pushToHistory(beautyValues, updatedClips);
+  };
+
   const deleteClip = (clipId: string, ripple = false) => {
     const clipIdx = timelineClips.findIndex(c => c.id === clipId);
     if (clipIdx === -1) return;
@@ -1031,6 +1063,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toggleAutoBeautify,
       splitClip,
       trimClip,
+      moveClip,
       setPlayheadPosition,
       setIsPlaying,
       setZoomLevel,
