@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, onSnapshot, query, where, deleteDoc, getDocs } from 'firebase/firestore';
 import { DeterministicExporter } from '../services/DeterministicExporter';
 
 // Interfaces
@@ -164,6 +164,18 @@ export interface Lens {
   values?: BeautyValues;
 }
 
+export interface OverlayClip {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  color: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  style: 'normal' | 'shadow' | 'background';
+}
+
 interface AppContextType {
   user: User | null;
   currentView: 'auth' | 'dashboard' | 'editor' | 'marketplace' | 'ideas';
@@ -189,6 +201,16 @@ interface AppContextType {
   showExportModal: boolean;
   marketplaceLenses: Lens[];
   
+  // Overlay text properties
+  overlayClips: OverlayClip[];
+  selectedOverlayId: string | null;
+  setSelectedOverlayId: (id: string | null) => void;
+  addOverlayClip: (text: string, start: number, duration: number) => void;
+  updateOverlayClip: (clipId: string, updates: Partial<OverlayClip>) => void;
+  deleteOverlayClip: (clipId: string) => void;
+  moveOverlayClip: (clipId: string, newStart: number) => void;
+  trimOverlayClip: (clipId: string, side: 'start' | 'end', delta: number) => void;
+  
   // Methods
   login: (email: string) => void;
   logout: () => void;
@@ -203,6 +225,8 @@ interface AppContextType {
   savePreset: (presetName: string) => void;
   deletePreset: (presetName: string) => void;
   publishPresetToMarketplace: (presetName: string) => void;
+  unpublishPresetFromMarketplace: (presetName: string) => void;
+  publishedPresetNames: string[];
   customPresets: Record<string, BeautyValues>;
   toggleAutoBeautify: () => void;
   splitClip: () => void;
@@ -445,6 +469,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [playheadPosition, setPlayheadPosition] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(50);
+  const [overlayClips, setOverlayClips] = useState<OverlayClip[]>([]);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
 
   // History for Undo/Redo
   const [history, setHistory] = useState<{ beauty: BeautyValues; clips: TimelineClip[] }[]>([]);
@@ -462,6 +488,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [exportResolution, setExportResolution] = useState('720p');
   const exportCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const exportVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Published Lenses Tracker
+  const [publishedPresetNames, setPublishedPresetNames] = useState<string[]>([]);
+  useEffect(() => {
+    if (!user) {
+      setPublishedPresetNames([]);
+      return;
+    }
+    const q = query(collection(db, 'lenses'), where('creatorId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const names = snapshot.docs.map(doc => doc.data().name);
+      setPublishedPresetNames(names);
+    }, (error) => {
+      console.warn("Failed to listen to published presets:", error);
+    });
+    return unsubscribe;
+  }, [user]);
 
   // Auth & Firestore Listener
   useEffect(() => {
@@ -557,6 +600,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProjects([newProject, ...projects]);
     setActiveProject(newProject);
     setCurrentView('editor');
+    
+    // Reset/populate default mock text overlay clip
+    setOverlayClips([
+      {
+        id: 'ov_default',
+        start: 0.0,
+        end: 5.0,
+        text: 'SnapBeauty Studio',
+        color: '#ffffff',
+        x: 50,
+        y: 85,
+        fontSize: 28,
+        style: 'shadow'
+      }
+    ]);
+    setSelectedOverlayId(null);
     return newProject;
   };
 
@@ -565,6 +624,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (proj) {
       setActiveProject(proj);
       setCurrentView('editor');
+      setSelectedOverlayId(null);
+      setOverlayClips([
+        {
+          id: 'ov_default',
+          start: 0.0,
+          end: 5.0,
+          text: 'SnapBeauty Studio',
+          color: '#ffffff',
+          x: 50,
+          y: 85,
+          fontSize: 28,
+          style: 'shadow'
+        }
+      ]);
     }
   };
 
@@ -667,7 +740,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const presetValues = customPresets[presetName];
     if (!presetValues) return;
     
-    // Add to lenses collection
+    // Add to lenses collection with a deterministic document ID
     const newLens = {
       name: presetName,
       creator: user.displayName || user.email?.split('@')[0] || 'Anonymous',
@@ -683,11 +756,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     
     try {
-      await setDoc(doc(collection(db, 'lenses')), newLens);
+      await setDoc(doc(db, 'lenses', `${user.uid}_${presetName}`), newLens);
       alert(`Successfully published "${presetName}" to the global marketplace!`);
     } catch (error) {
       console.error("Failed to publish preset to marketplace:", error);
       alert(`Failed to publish "${presetName}" (please check your network connection).`);
+    }
+  };
+
+  const unpublishPresetFromMarketplace = async (presetName: string) => {
+    if (!user) return;
+    try {
+      const q = query(
+        collection(db, 'lenses'), 
+        where('creatorId', '==', user.uid),
+        where('name', '==', presetName)
+      );
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) {
+        alert(`Could not find "${presetName}" in the marketplace.`);
+        return;
+      }
+      
+      const deletePromises = snapshot.docs.map(docSnap => deleteDoc(doc(db, 'lenses', docSnap.id)));
+      await Promise.all(deletePromises);
+      alert(`Successfully unpublished "${presetName}" from the marketplace.`);
+    } catch (error) {
+      console.error("Failed to unpublish preset:", error);
+      alert(`Failed to unpublish "${presetName}" (please check your network connection).`);
     }
   };
 
@@ -839,6 +935,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToHistory(beautyValues, updatedClips);
   };
 
+  const addOverlayClip = (text: string, start: number, duration: number) => {
+    const newClip: OverlayClip = {
+      id: 'ov_' + Math.random().toString(36).substr(2, 9),
+      start,
+      end: start + duration,
+      text,
+      color: '#ffffff',
+      x: 50,
+      y: 85,
+      fontSize: 28,
+      style: 'shadow'
+    };
+    const updated = [...overlayClips, newClip].sort((a, b) => a.start - b.start);
+    setOverlayClips(updated);
+  };
+
+  const updateOverlayClip = (clipId: string, updates: Partial<OverlayClip>) => {
+    const updated = overlayClips.map(c => 
+      c.id === clipId ? { ...c, ...updates } : c
+    );
+    setOverlayClips(updated);
+  };
+
+  const deleteOverlayClip = (clipId: string) => {
+    setOverlayClips(overlayClips.filter(c => c.id !== clipId));
+    if (selectedOverlayId === clipId) setSelectedOverlayId(null);
+  };
+
+  const moveOverlayClip = (clipId: string, newStart: number) => {
+    const idx = overlayClips.findIndex(c => c.id === clipId);
+    if (idx === -1) return;
+    const clip = overlayClips[idx];
+    const duration = clip.end - clip.start;
+    const maxDur = activeProject?.video?.duration || 100;
+    
+    const clampedStart = Math.max(0, Math.min(newStart, maxDur - duration));
+    const clampedEnd = clampedStart + duration;
+
+    const updated = overlayClips.map(c => 
+      c.id === clipId ? { ...c, start: clampedStart, end: clampedEnd } : c
+    ).sort((a, b) => a.start - b.start);
+
+    setOverlayClips(updated);
+  };
+
+  const trimOverlayClip = (clipId: string, side: 'start' | 'end', delta: number) => {
+    const updated = overlayClips.map(clip => {
+      if (clip.id === clipId) {
+        if (side === 'start') {
+          const newStart = Math.max(0, Math.min(clip.end - 0.5, clip.start + delta));
+          return { ...clip, start: newStart };
+        } else {
+          const maxDur = activeProject?.video?.duration || 100;
+          const newEnd = Math.max(clip.start + 0.5, Math.min(maxDur, clip.end + delta));
+          return { ...clip, end: newEnd };
+        }
+      }
+      return clip;
+    });
+    setOverlayClips(updated);
+  };
+
   const deleteClip = (clipId: string, ripple = false) => {
     const clipIdx = timelineClips.findIndex(c => c.id === clipId);
     if (clipIdx === -1) return;
@@ -975,8 +1133,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         beautyValues: beautyValues,
         resolution: resolution,
         projectName: projectName,
-        fps: 30, // Locked to 30fps for stable quality
+        fps: 30,
         timelineClips: timelineClips,
+        overlayClips: overlayClips,
         useTransitions: useTransitions,
         sourceFile: activeProject.video?.file,
         onProgress: (pct) => {
@@ -1059,6 +1218,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       renamePreset,
       updateProfileName,
       publishPresetToMarketplace,
+      unpublishPresetFromMarketplace,
+      publishedPresetNames,
       customPresets,
       toggleAutoBeautify,
       splitClip,
@@ -1080,6 +1241,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isExporting,
       exportResolution,
       updateExportProgress,
+      overlayClips,
+      selectedOverlayId,
+      setSelectedOverlayId,
+      addOverlayClip,
+      updateOverlayClip,
+      deleteOverlayClip,
+      moveOverlayClip,
+      trimOverlayClip,
       login,
       register,
       upgradeToPro,

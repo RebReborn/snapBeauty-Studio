@@ -234,6 +234,7 @@ const Visualizer: React.FC = () => {
     isExporting, exportResolution,
     timelineClips,
     useTransitions,
+    overlayClips,
   } = useApp();
 
   // ── Refs ──────────────────────────────────────────────────────────────────
@@ -250,6 +251,7 @@ const Visualizer: React.FC = () => {
   const showMeshRef = useRef(true);
   const showBoxRef  = useRef(true);
   const isExportingRef = useRef(isExporting);
+  const overlayClipsRef = useRef(overlayClips);
 
   // Face detection/mesh refs (written from worker, read in RAF)
   const landmarksRef   = useRef<Array<{ x: number; y: number; z: number }> | null>(null);
@@ -290,6 +292,7 @@ const Visualizer: React.FC = () => {
   useEffect(() => { showBoxRef.current  = showBox;      }, [showBox]);
   useEffect(() => { showCompareRef.current = showCompare; }, [showCompare]);
   useEffect(() => { isExportingRef.current = isExporting; }, [isExporting]);
+  useEffect(() => { overlayClipsRef.current = overlayClips; }, [overlayClips]);
 
   // ── Init MediaPipe face mesh engine ──────────────────────────────────────────
   useEffect(() => {
@@ -426,6 +429,56 @@ const Visualizer: React.FC = () => {
               );
             }
             ctx.restore();
+          }
+
+          // ── Text Overlays Rendering ──
+          if (overlayClipsRef.current && overlayClipsRef.current.length > 0) {
+            const time = playheadPositionRef.current;
+            const activeOverlays = overlayClipsRef.current.filter(c => c.start <= time && time <= c.end);
+            
+            if (activeOverlays.length > 0) {
+              ctx.save();
+              activeOverlays.forEach(ov => {
+                const textX = (ov.x / 100) * w;
+                const textY = (ov.y / 100) * h;
+                
+                // Scale font size based on canvas width (normalized to 1280px width)
+                const baseScale = w / 1280;
+                const finalFontSize = Math.round(Math.max(12, ov.fontSize * baseScale));
+                
+                ctx.font = `bold ${finalFontSize}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Draw background box style if enabled
+                if (ov.style === 'background') {
+                  const paddingX = 12 * baseScale;
+                  const paddingY = 8 * baseScale;
+                  const textWidth = ctx.measureText(ov.text).width;
+                  
+                  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+                  roundRect(
+                    ctx,
+                    textX - textWidth / 2 - paddingX,
+                    textY - finalFontSize / 2 - paddingY,
+                    textWidth + paddingX * 2,
+                    finalFontSize + paddingY * 2,
+                    6 * baseScale
+                  );
+                  ctx.fill();
+                } else if (ov.style === 'shadow') {
+                  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                  ctx.shadowBlur = 6 * baseScale;
+                  ctx.shadowOffsetX = 2 * baseScale;
+                  ctx.shadowOffsetY = 2 * baseScale;
+                }
+                
+                // Draw Text Fill
+                ctx.fillStyle = ov.color || '#ffffff';
+                ctx.fillText(ov.text, textX, textY);
+              });
+              ctx.restore();
+            }
           }
 
           if (useTransitionsRef.current) {

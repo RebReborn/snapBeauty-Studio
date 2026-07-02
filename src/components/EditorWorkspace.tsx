@@ -7,7 +7,8 @@ import Marketplace from './Marketplace';
 import { 
   ArrowLeft, Undo2, Redo2, Sparkles, Download, 
   Video, Folder, ShoppingBag, Palette,
-  Loader2, CheckCircle, XCircle, Keyboard, Settings
+  Loader2, CheckCircle, XCircle, Keyboard, Settings, Type,
+  ChevronDown, ChevronRight
 } from 'lucide-react';
 
 const EditorWorkspace: React.FC = () => {
@@ -32,10 +33,16 @@ const EditorWorkspace: React.FC = () => {
     setIsPlaying,
     showShortcutsHelp,
     setShowShortcutsHelp,
-    setShowProfileSettings
+    setShowProfileSettings,
+    overlayClips,
+    selectedOverlayId,
+    setSelectedOverlayId,
+    addOverlayClip,
+    updateOverlayClip,
+    deleteOverlayClip,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'media' | 'presets' | 'marketplace' | 'color'>('color');
+  const [activeTab, setActiveTab] = useState<'media' | 'presets' | 'marketplace' | 'color' | 'text'>('color');
 
   // Keyboard Shortcuts Hook
   React.useEffect(() => {
@@ -237,6 +244,7 @@ const EditorWorkspace: React.FC = () => {
           {[
             { id: 'color', icon: Palette, label: 'Color' },
             { id: 'presets', icon: Sparkles, label: 'Lenses' },
+            { id: 'text', icon: Type, label: 'Text' },
             { id: 'marketplace', icon: ShoppingBag, label: 'Market' },
             { id: 'media', icon: Folder, label: 'Assets' }
           ].map((tab) => (
@@ -260,6 +268,148 @@ const EditorWorkspace: React.FC = () => {
         <aside className="w-[280px] bg-studio-dark/40 border-r border-white/5 flex flex-col shrink-0 panel-transition">
           {activeTab === 'color' && (
             <VideoColorGradingPanel />
+          )}
+
+          {activeTab === 'text' && (
+            <div className="p-4 flex-1 flex flex-col overflow-y-auto space-y-4">
+              <div className="flex items-center justify-between shrink-0">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Text Overlays</h3>
+                <button
+                  onClick={() => addOverlayClip("New Subtitle", playheadPosition, 4.0)}
+                  className="px-2.5 py-1 rounded bg-purple-500 hover:bg-purple-600 text-[10px] font-bold text-white active:scale-95 transition-all"
+                >
+                  + Add Text
+                </button>
+              </div>
+
+              {/* Text list */}
+              <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+                {overlayClips.length === 0 ? (
+                  <div className="py-6 text-center text-[11px] text-gray-500 border border-dashed border-white/5 rounded-xl">
+                    No text overlays added yet.<br/>
+                    Click "+ Add Text" to insert subtitles.
+                  </div>
+                ) : (
+                  overlayClips.map((ov) => {
+                    const isSelected = selectedOverlayId === ov.id;
+                    return (
+                      <div
+                        key={ov.id}
+                        onClick={() => setSelectedOverlayId(ov.id)}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-purple-950/20 border-purple-500/50 shadow-md shadow-purple-500/5'
+                            : 'bg-white/2 border-white/5 hover:border-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-purple-400 font-mono font-bold">
+                            {ov.start.toFixed(1)}s - {ov.end.toFixed(1)}s
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteOverlayClip(ov.id); }}
+                            className="text-gray-500 hover:text-red-400 p-0.5"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-white font-medium truncate mt-1">"{ov.text}"</p>
+                        
+                        {/* Editor Controls if selected */}
+                        {isSelected && (
+                          <div className="mt-3 space-y-3 pt-3 border-t border-white/5" onClick={(e) => e.stopPropagation()}>
+                            {/* Text String Input */}
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase">Text Content</label>
+                              <input
+                                type="text"
+                                value={ov.text}
+                                onChange={(e) => updateOverlayClip(ov.id, { text: e.target.value })}
+                                className="w-full bg-studio-darker border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+
+                            {/* Position Sliders */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase">
+                                <span>Horizontal Position (X)</span>
+                                <span className="text-white font-mono">{ov.x}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="5" max="95" step="1"
+                                value={ov.x}
+                                onChange={(e) => updateOverlayClip(ov.id, { x: parseInt(e.target.value) })}
+                                className="w-full accent-purple-500"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase">
+                                <span>Vertical Position (Y)</span>
+                                <span className="text-white font-mono">{ov.y}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="5" max="95" step="1"
+                                value={ov.y}
+                                onChange={(e) => updateOverlayClip(ov.id, { y: parseInt(e.target.value) })}
+                                className="w-full accent-purple-500"
+                              />
+                            </div>
+
+                            {/* Font Size & Styling */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase">Size</label>
+                                <input
+                                  type="number"
+                                  min="12" max="72"
+                                  value={ov.fontSize}
+                                  onChange={(e) => updateOverlayClip(ov.id, { fontSize: parseInt(e.target.value) || 24 })}
+                                  className="w-full bg-studio-darker border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase">Style</label>
+                                <select
+                                  value={ov.style}
+                                  onChange={(e) => updateOverlayClip(ov.id, { style: e.target.value as any })}
+                                  className="w-full bg-studio-darker border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                                >
+                                  <option value="normal">Normal</option>
+                                  <option value="shadow">Shadow</option>
+                                  <option value="background">Box BG</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Color Selector */}
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase">Text Color</label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="color"
+                                  value={ov.color}
+                                  onChange={(e) => updateOverlayClip(ov.id, { color: e.target.value })}
+                                  className="h-6 w-10 bg-transparent border-0 cursor-pointer outline-none shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={ov.color.toUpperCase()}
+                                  onChange={(e) => updateOverlayClip(ov.id, { color: e.target.value })}
+                                  className="w-full bg-studio-darker border border-white/10 rounded px-2 py-1 text-xs font-mono text-white focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           )}
 
           {activeTab === 'media' && (
@@ -477,15 +627,44 @@ const BeautyPresetsList: React.FC = () => {
 // Internal Subcomponent for Color Grading
 const VideoColorGradingPanel: React.FC = () => {
   const { beautyValues, updateBeautyValue } = useApp();
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({
+    'Effects': true,
+    'Detail': true,
+  });
 
-  const SliderGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
-    <div className="space-y-4 mb-6">
-      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest pb-1 border-b border-white/5">{title}</h4>
-      <div className="space-y-4">
-        {children}
+  const toggleGroup = (groupTitle: string) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupTitle]: !prev[groupTitle]
+    }));
+  };
+
+  const SliderGroup = ({ title, children }: { title: string, children: React.ReactNode }) => {
+    const isCollapsed = !!collapsedGroups[title];
+    return (
+      <div className="mb-4 bg-white/2 border border-white/5 rounded-xl p-3 hover:border-white/10 transition-colors">
+        <button
+          onClick={() => toggleGroup(title)}
+          className="w-full flex items-center justify-between text-left select-none focus:outline-none"
+        >
+          <span className="text-[10px] font-black text-purple-300 uppercase tracking-widest">
+            {title}
+          </span>
+          {isCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5 text-gray-500 hover:text-white" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 text-gray-400 hover:text-white" />
+          )}
+        </button>
+        
+        {!isCollapsed && (
+          <div className="space-y-4 mt-3">
+            {children}
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const ColorSlider = ({ label, valueKey, min = -100, max = 100, isPercent = false }: { label: string, valueKey: keyof BeautyValues, min?: number, max?: number, isPercent?: boolean }) => {
     const val = beautyValues[valueKey] as number;

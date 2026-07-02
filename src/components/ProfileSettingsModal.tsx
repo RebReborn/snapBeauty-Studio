@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { User, Palette, Trash2, Edit3, Share2, X, Check } from 'lucide-react';
+import { User, Palette, Trash2, Edit3, Share2, X, Check, Globe } from 'lucide-react';
 
 const ProfileSettingsModal: React.FC = () => {
   const {
@@ -9,6 +9,8 @@ const ProfileSettingsModal: React.FC = () => {
     renamePreset,
     deletePreset,
     publishPresetToMarketplace,
+    unpublishPresetFromMarketplace,
+    publishedPresetNames,
     updateProfileName,
     showProfileSettings,
     setShowProfileSettings
@@ -118,7 +120,7 @@ const ProfileSettingsModal: React.FC = () => {
                     value={newName} 
                     onChange={(e) => setNewName(e.target.value)} 
                     placeholder="Enter your name"
-                    className="flex-1 px-3 py-2 rounded-xl bg-white/3 border border-white/10 hover:border-white/20 focus:border-purple-500 text-white text-xs outline-none transition-all"
+                    className="flex-1 px-3 py-2 rounded-xl bg-black/40 border border-white/10 hover:border-white/20 focus:border-purple-500 text-white text-xs outline-none transition-all"
                   />
                   <button 
                     type="submit"
@@ -157,6 +159,7 @@ const ProfileSettingsModal: React.FC = () => {
               <div className="space-y-2.5">
                 {Object.keys(customPresets).map((presetName) => {
                   const isRenaming = renamingPresetName === presetName;
+                  const isPublished = publishedPresetNames.includes(presetName);
                   return (
                     <div 
                       key={presetName} 
@@ -210,14 +213,25 @@ const ProfileSettingsModal: React.FC = () => {
                           <span>Rename</span>
                         </button>
 
-                        <button 
-                          onClick={() => publishPresetToMarketplace(presetName)}
-                          title="Publish to Community Marketplace"
-                          className="h-7 px-2.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-[10px] font-semibold flex items-center gap-1 border border-purple-500/20 transition-all active:scale-[0.97]"
-                        >
-                          <Share2 className="h-3 w-3 text-purple-400" />
-                          <span>Publish</span>
-                        </button>
+                        {isPublished ? (
+                          <button 
+                            onClick={() => unpublishPresetFromMarketplace(presetName)}
+                            title="Remove from Community Marketplace"
+                            className="h-7 px-2.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 text-[10px] font-semibold flex items-center gap-1 border border-red-500/20 transition-all active:scale-[0.97]"
+                          >
+                            <Globe className="h-3 w-3 text-red-400" />
+                            <span>Unpublish</span>
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => publishPresetToMarketplace(presetName)}
+                            title="Publish to Community Marketplace"
+                            className="h-7 px-2.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-[10px] font-semibold flex items-center gap-1 border border-purple-500/20 transition-all active:scale-[0.97]"
+                          >
+                            <Share2 className="h-3 w-3 text-purple-400" />
+                            <span>Publish</span>
+                          </button>
+                        )}
 
                         <button 
                           onClick={() => {

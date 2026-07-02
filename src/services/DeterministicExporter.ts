@@ -1,7 +1,7 @@
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { WebDemuxer } from 'web-demuxer';
 import { BeautyEngine } from './BeautyEngine';
-import { BeautyValues, TimelineClip } from '../context/AppContext';
+import { BeautyValues, TimelineClip, OverlayClip } from '../context/AppContext';
 import { LucidEngine } from './LucidEngine';
 import { faceMeshEngine } from './FaceMeshEngine';
 
@@ -11,6 +11,7 @@ export interface ExportOptions {
   resolution: string; // e.g., '1080p', '4K'
   fps?: number;
   timelineClips: TimelineClip[];
+  overlayClips?: OverlayClip[];
   useTransitions?: boolean;
   onProgress: (progress: number) => void;
   onComplete: (downloadUrl: string, fileName: string) => void;
@@ -73,6 +74,7 @@ export class DeterministicExporter {
       resolution, 
       fps = 30, 
       timelineClips = [],
+      overlayClips = [],
       useTransitions = true,
       onProgress, 
       onComplete, 
@@ -372,6 +374,67 @@ export class DeterministicExporter {
                 next: nextItem.canvas
               }
             );
+
+            // Render active text overlays on the exporting canvas
+            if (overlayClips && overlayClips.length > 0) {
+              const time = currentItem.timestamp;
+              const activeOverlays = overlayClips.filter(c => c.start <= time && time <= c.end);
+              
+              if (activeOverlays.length > 0) {
+                ctx.save();
+                activeOverlays.forEach(ov => {
+                  const textX = (ov.x / 100) * width;
+                  const textY = (ov.y / 100) * height;
+                  
+                  // Scale font size based on final export canvas width (normalized to 1280px width)
+                  const baseScale = width / 1280;
+                  const finalFontSize = Math.round(Math.max(12, ov.fontSize * baseScale));
+                  
+                  ctx.font = `bold ${finalFontSize}px sans-serif`;
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  
+                  // Draw background box style if enabled
+                  if (ov.style === 'background') {
+                    const paddingX = 12 * baseScale;
+                    const paddingY = 8 * baseScale;
+                    const textWidth = ctx.measureText(ov.text).width;
+                    
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+                    
+                    // Simple Offscreen rounded rectangle fallback
+                    const rx = textX - textWidth / 2 - paddingX;
+                    const ry = textY - finalFontSize / 2 - paddingY;
+                    const rw = textWidth + paddingX * 2;
+                    const rh = finalFontSize + paddingY * 2;
+                    const r = 6 * baseScale;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(rx + r, ry);
+                    ctx.lineTo(rx + rw - r, ry);
+                    ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
+                    ctx.lineTo(rx + rw, ry + rh - r);
+                    ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
+                    ctx.lineTo(rx + r, ry + rh);
+                    ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+                    ctx.lineTo(rx, ry + r);
+                    ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+                    ctx.closePath();
+                    ctx.fill();
+                  } else if (ov.style === 'shadow') {
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                    ctx.shadowBlur = 6 * baseScale;
+                    ctx.shadowOffsetX = 2 * baseScale;
+                    ctx.shadowOffsetY = 2 * baseScale;
+                  }
+                  
+                  // Draw Text Fill
+                  ctx.fillStyle = ov.color || '#ffffff';
+                  ctx.fillText(ov.text, textX, textY);
+                });
+                ctx.restore();
+              }
+            }
 
             // Apply Transition overlay
             if (useTransitions) {

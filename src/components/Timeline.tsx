@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Scissors, ZoomIn, ZoomOut, Play, Pause, 
-  Volume2, Video, Sparkles, Trash2 
+  Volume2, Video, Sparkles, Trash2, Type 
 } from 'lucide-react';
 
 const Timeline: React.FC = () => {
@@ -23,7 +23,12 @@ const Timeline: React.FC = () => {
     setSelectedClipId,
     deleteClip,
     useTransitions,
-    setUseTransitions
+    setUseTransitions,
+    overlayClips,
+    selectedOverlayId,
+    setSelectedOverlayId,
+    moveOverlayClip,
+    trimOverlayClip
   } = useApp();
 
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -129,6 +134,72 @@ const Timeline: React.FC = () => {
       const deltaPx = moveEvent.clientX - startX;
       const deltaSec = deltaPx / pxPerSec;
       moveClip(clipId, initialStart + deltaSec);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleOverlayTrimStart = (clipId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const startX = e.clientX;
+    const clip = overlayClips.find(c => c.id === clipId);
+    if (!clip) return;
+    
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaPx = moveEvent.clientX - startX;
+      const deltaSec = deltaPx / pxPerSec;
+      trimOverlayClip(clipId, 'start', deltaSec);
+    };
+    
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleOverlayTrimEnd = (clipId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const startX = e.clientX;
+    const clip = overlayClips.find(c => c.id === clipId);
+    if (!clip) return;
+    
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaPx = moveEvent.clientX - startX;
+      const deltaSec = deltaPx / pxPerSec;
+      trimOverlayClip(clipId, 'end', deltaSec);
+    };
+    
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleOverlayClipDrag = (clipId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    
+    const startX = e.clientX;
+    const clip = overlayClips.find(c => c.id === clipId);
+    if (!clip) return;
+    const initialStart = clip.start;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaPx = moveEvent.clientX - startX;
+      const deltaSec = deltaPx / pxPerSec;
+      moveOverlayClip(clipId, initialStart + deltaSec);
     };
 
     const onMouseUp = () => {
@@ -261,8 +332,12 @@ const Timeline: React.FC = () => {
               <Video className="h-4 w-4" />
             </div>
             {/* Audio Label */}
-            <div className="h-[45px] flex items-center justify-center text-gray-400">
+            <div className="h-[45px] border-b border-white/5 flex items-center justify-center text-gray-400">
               <Volume2 className="h-4 w-4" />
+            </div>
+            {/* Text Overlay Label */}
+            <div className="h-[45px] flex items-center justify-center text-gray-400">
+              <Type className="h-4 w-4" />
             </div>
           </div>
         </div>
@@ -367,6 +442,49 @@ const Timeline: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Track 3: Text Overlays */}
+            <div className="h-[45px] border-t border-white/5 relative py-1 bg-black/15">
+              {/* Text Clips layout */}
+              <div className="h-full relative w-full">
+                {overlayClips.map((clip) => {
+                  const isSelected = selectedOverlayId === clip.id;
+                  return (
+                    <div
+                      key={clip.id}
+                      onClick={(e) => { e.stopPropagation(); setSelectedOverlayId(clip.id); }}
+                      onMouseDown={(e) => handleOverlayClipDrag(clip.id, e)}
+                      className={`absolute h-[32px] top-1 rounded-lg overflow-hidden flex items-center justify-between p-2 select-none group cursor-pointer transition-all ${
+                        isSelected 
+                          ? 'bg-gradient-to-r from-amber-700/80 to-yellow-700/80 border-2 border-yellow-400 shadow-lg shadow-yellow-500/20 z-20 scale-[0.98]' 
+                          : 'bg-gradient-to-r from-amber-950/40 to-yellow-950/40 border border-yellow-500/25 hover:border-yellow-500/40 z-10'
+                      }`}
+                      style={{
+                        left: `${clip.start * pxPerSec}px`,
+                        width: `${(clip.end - clip.start) * pxPerSec}px`,
+                      }}
+                    >
+                      {/* Left Trim Handle */}
+                      <div 
+                        onMouseDown={(e) => handleOverlayTrimStart(clip.id, e)}
+                        className="absolute left-0 top-0 bottom-0 w-2 bg-yellow-500/70 cursor-w-resize rounded-l-md hover:bg-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      />
+
+                      {/* Clip Label */}
+                      <div className="text-[9px] font-bold text-yellow-100 px-2 truncate leading-tight select-none">
+                        T: "{clip.text}"
+                      </div>
+
+                      {/* Right Trim Handle */}
+                      <div 
+                        onMouseDown={(e) => handleOverlayTrimEnd(clip.id, e)}
+                        className="absolute right-0 top-0 bottom-0 w-2 bg-yellow-500/70 cursor-e-resize rounded-r-md hover:bg-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

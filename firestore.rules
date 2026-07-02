@@ -26,7 +26,7 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.creatorId == request.auth.uid;
       
       // Users can only edit or delete lenses they published themselves
-      allow update, delete: if isAuthenticated() && resource.data.creatorId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid;
     }
 
     // Global community ideas and feature requests
@@ -41,7 +41,7 @@ service cloud.firestore {
       allow update: if isAuthenticated();
       
       // Users can only delete ideas they created
-      allow delete: if isAuthenticated() && resource.data.creatorId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource != null && resource.data.creatorId == request.auth.uid;
     }
   }
 }
