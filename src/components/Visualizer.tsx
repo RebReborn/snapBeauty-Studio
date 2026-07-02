@@ -702,21 +702,22 @@ const Visualizer: React.FC = () => {
       </div>
 
       {/* ── Canvas ── */}
-      <div className="flex-1 overflow-auto p-2 relative z-0 min-h-0 flex custom-scrollbar">
+      <div className="flex-1 overflow-auto p-4 relative z-0 min-h-0 flex custom-scrollbar">
         <div 
           className="m-auto relative transition-all duration-200 flex items-center justify-center"
           style={{ 
-            width: viewerZoom > 100 ? `${viewerZoom}%` : '100%', 
-            height: viewerZoom > 100 ? `${viewerZoom}%` : '100%',
-            minWidth: '100%',
-            minHeight: '100%'
+            width: `${viewerZoom}%`, 
+            height: 'auto',
+            aspectRatio: `${canvasSize.w} / ${canvasSize.h}`,
+            maxWidth: viewerZoom > 100 ? 'none' : '100%',
+            maxHeight: viewerZoom > 100 ? 'none' : '78vh'
           }}
         >
           <canvas
             ref={canvasRef}
             width={canvasSize.w}
             height={canvasSize.h}
-            className="rounded-xl border border-white/10 shadow-2xl shadow-black/60 object-contain max-w-full max-h-full"
+            className="rounded-xl border border-white/10 shadow-2xl shadow-black/60 object-contain"
             style={{ width: '100%', height: '100%' }}
           />
           {/* Split drag zone */}
