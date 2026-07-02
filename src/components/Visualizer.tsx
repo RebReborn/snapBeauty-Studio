@@ -232,6 +232,7 @@ const Visualizer: React.FC = () => {
     isPlaying, setIsPlaying,
     exportCanvasRef, exportVideoRef,
     isExporting, exportResolution,
+    timelineClips,
   } = useApp();
 
   // ── Refs ──────────────────────────────────────────────────────────────────
@@ -350,65 +351,81 @@ const Visualizer: React.FC = () => {
           const landmarks   = landmarksRef.current;
           const faceBox     = faceBoxRef.current;
 
-          // LEFT — original
-          if (!isExp) {
+          const clips = timelineClipsRef.current;
+          const currentClip = clips.find(
+            c => playheadPositionRef.current >= c.start && playheadPositionRef.current <= c.end
+          );
+          const isGap = clips.length > 0 && !currentClip;
+
+          if (isGap) {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('[ GAP - NO MEDIA ]', w / 2, h / 2);
+          } else {
+            // LEFT — original
+            if (!isExp) {
+              ctx.save();
+              ctx.beginPath(); ctx.rect(0, 0, sx, h); ctx.clip();
+              ctx.filter = 'none';
+              ctx.drawImage(video!, 0, 0, w, h);
+              ctx.fillStyle = 'rgba(0,0,0,0.52)'; ctx.fillRect(8, 8, 72, 20);
+              ctx.fillStyle = '#e5e7eb';
+              ctx.font = 'bold 10px system-ui';
+              ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+              ctx.fillText('◁  ORIGINAL', 13, 18);
+              ctx.restore();
+            }
+
+            // RIGHT — beauty filtered
             ctx.save();
-            ctx.beginPath(); ctx.rect(0, 0, sx, h); ctx.clip();
-            ctx.filter = 'none';
-            ctx.drawImage(video!, 0, 0, w, h);
-            ctx.fillStyle = 'rgba(0,0,0,0.52)'; ctx.fillRect(8, 8, 72, 20);
-            ctx.fillStyle = '#e5e7eb';
-            ctx.font = 'bold 10px system-ui';
-            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-            ctx.fillText('◁  ORIGINAL', 13, 18);
+            ctx.beginPath(); ctx.rect(sx, 0, w - sx, h); ctx.clip();
+            
+            // Apply Global Color Grading (Draws video to canvas)
+            BeautyEngine.drawVideoWithGlobalColorGrading(ctx, video!, w, h, bv);
+            
+            // Apply new canvas-based BeautyEngine filters
+            BeautyEngine.apply(
+              ctx,
+              video!,
+              w,
+              h,
+              landmarks,
+              segmentationMaskRef.current,
+              maskSizeRef.current.w,
+              maskSizeRef.current.h,
+              bv
+            );
+            // ── Split Slider Line ──
+            if (!isExp && sx > 0 && sx < w) {
+              ctx.fillStyle = '#fff';
+              ctx.fillRect(sx - 1.5, 0, 3, h);
+              // Pill
+              ctx.fillStyle = '#c084fc';
+              roundRect(ctx, sx - 4, h / 2 - 20, 8, 40, 4);
+              ctx.fill();
+              
+              ctx.fillStyle = 'rgba(0,0,0,0.52)';
+              ctx.fillRect(w - 80, 8, 72, 20);
+              ctx.fillStyle = '#e5e7eb';
+              ctx.font = 'bold 10px system-ui';
+              ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+              ctx.fillText('EDITED  ▷', w - 13, 18);
+            }
+
+            // ── Face Mesh & BBox ──
+            if (!isExp) {
+              drawFaceMesh(
+                ctx, w, h,
+                showMeshRef.current, showBoxRef.current,
+                landmarks, faceBox
+              );
+            }
             ctx.restore();
           }
-
-          // RIGHT — beauty filtered
-          ctx.save();
-          ctx.beginPath(); ctx.rect(sx, 0, w - sx, h); ctx.clip();
-          
-          // Apply Global Color Grading (Draws video to canvas)
-          BeautyEngine.drawVideoWithGlobalColorGrading(ctx, video!, w, h, bv);
-          
-          // Apply new canvas-based BeautyEngine filters
-          BeautyEngine.apply(
-            ctx,
-            video!,
-            w,
-            h,
-            landmarks,
-            segmentationMaskRef.current,
-            maskSizeRef.current.w,
-            maskSizeRef.current.h,
-            bv
-          );
-          // ── Split Slider Line ──
-          if (!isExp && sx > 0 && sx < w) {
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(sx - 1.5, 0, 3, h);
-            // Pill
-            ctx.fillStyle = '#c084fc';
-            roundRect(ctx, sx - 4, h / 2 - 20, 8, 40, 4);
-            ctx.fill();
-            
-            ctx.fillStyle = 'rgba(0,0,0,0.52)';
-            ctx.fillRect(w - 80, 8, 72, 20);
-            ctx.fillStyle = '#e5e7eb';
-            ctx.font = 'bold 10px system-ui';
-            ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-            ctx.fillText('EDITED  ▷', w - 13, 18);
-          }
-
-          // ── Face Mesh & BBox ──
-          if (!isExp) {
-            drawFaceMesh(
-              ctx, w, h,
-              showMeshRef.current, showBoxRef.current,
-              landmarks, faceBox
-            );
-          }
-          ctx.restore();
 
           // Update face detected badge safely
           const hasFace = !!faceBox;
@@ -511,41 +528,151 @@ const Visualizer: React.FC = () => {
       const ratio = vw / vh;
       setCanvasSize({ w: Math.round(720 * ratio), h: 720 });
     };
-    const onTimeUpdate = () => {
-      if (!isExportingRef.current) {
-        setPlayheadPosition(video.currentTime);
-      }
-    };
-    const onEnded      = () => setIsPlaying(false);
     const onError      = (e: Event) => { console.error('Video error:', e); setHasVideo(false); };
     video.addEventListener('loadedmetadata', onMeta);
-    video.addEventListener('timeupdate',     onTimeUpdate);
-    video.addEventListener('ended',          onEnded);
     video.addEventListener('error',          onError);
     return () => {
       video.removeEventListener('loadedmetadata', onMeta);
-      video.removeEventListener('timeupdate',     onTimeUpdate);
-      video.removeEventListener('ended',          onEnded);
       video.removeEventListener('error',          onError);
     };
   }, [setPlayheadPosition, setIsPlaying]);
 
-  // ── Play / pause ───────────────────────────────────────────────────────────
+  // Keep refs of values to avoid hook recreation on every playhead update
+  const isPlayingRef = useRef(isPlaying);
+  const playheadPositionRef = useRef(playheadPosition);
+  const timelineClipsRef = useRef(timelineClips);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+    timelineClipsRef.current = timelineClips;
+  }, [isPlaying, timelineClips]);
+
+  useEffect(() => {
+    playheadPositionRef.current = playheadPosition;
+  }, [playheadPosition]);
+
+  // Unified Playback Sync Loop
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !hasVideo) return;
-    if (isPlaying) { video.play().catch(() => setIsPlaying(false)); }
-    else           { video.pause(); }
-  }, [isPlaying, hasVideo, setIsPlaying]);
 
-  // ── Scrub from timeline ────────────────────────────────────────────────────
+    let active = true;
+    let lastTime = performance.now();
+
+    const syncTick = () => {
+      if (!active) return;
+      const now = performance.now();
+      const elapsed = (now - lastTime) / 1000;
+      lastTime = now;
+
+      const playing = isPlayingRef.current;
+      const clips = timelineClipsRef.current;
+      const currentPlayhead = playheadPositionRef.current;
+
+      const totalDuration = clips.length > 0
+        ? Math.max(...clips.map(c => c.end))
+        : (video.duration || 0);
+
+      if (playing) {
+        // Find the clip at the current playhead
+        const clip = clips.find(
+          c => currentPlayhead >= c.start && currentPlayhead <= c.end
+        );
+
+        if (clip) {
+          // We are inside a clip. Let the video play.
+          const targetSourceTime = clip.sourceStart + (currentPlayhead - clip.start);
+          
+          if (video.paused) {
+            video.play().catch(() => setIsPlaying(false));
+          }
+
+          // If the video time is out of sync with target source time (e.g. drift > 0.25s)
+          if (Math.abs(video.currentTime - targetSourceTime) > 0.25) {
+            video.currentTime = targetSourceTime;
+          } else {
+            // Progress the playhead based on the video's real progress
+            const newPlayhead = clip.start + (video.currentTime - clip.sourceStart);
+            if (newPlayhead >= clip.end) {
+              const nextPlayhead = Math.min(totalDuration, clip.end + 0.01);
+              playheadPositionRef.current = nextPlayhead;
+              setPlayheadPosition(nextPlayhead);
+            } else {
+              const nextPlayhead = Math.min(totalDuration, newPlayhead);
+              playheadPositionRef.current = nextPlayhead;
+              setPlayheadPosition(nextPlayhead);
+            }
+          }
+        } else {
+          // We are in a GAP. Video must be paused.
+          if (!video.paused) {
+            video.pause();
+          }
+          // Progress playhead manually using wall-clock elapsed time
+          const nextPlayhead = currentPlayhead + elapsed;
+          if (nextPlayhead >= totalDuration) {
+            playheadPositionRef.current = totalDuration;
+            setPlayheadPosition(totalDuration);
+            setIsPlaying(false);
+          } else {
+            playheadPositionRef.current = nextPlayhead;
+            setPlayheadPosition(nextPlayhead);
+          }
+        }
+        
+        requestAnimationFrame(syncTick);
+      } else {
+        // Paused/Scrubbing: Sync video currentTime to match currentPlayhead if it changed
+        const clip = clips.find(
+          c => currentPlayhead >= c.start && currentPlayhead <= c.end
+        );
+        if (clip) {
+          const targetSourceTime = clip.sourceStart + (currentPlayhead - clip.start);
+          if (Math.abs(video.currentTime - targetSourceTime) > 0.05) {
+            video.currentTime = targetSourceTime;
+          }
+        }
+      }
+    };
+
+    // When isPlaying changes or playhead changes, sync or start animation loop
+    if (isPlaying) {
+      lastTime = performance.now();
+      requestAnimationFrame(syncTick);
+    } else {
+      // Sync once on pause/scrub
+      const clips = timelineClipsRef.current;
+      const currentPlayhead = playheadPositionRef.current;
+      const clip = clips.find(
+        c => currentPlayhead >= c.start && currentPlayhead <= c.end
+      );
+      if (clip) {
+        const targetSourceTime = clip.sourceStart + (currentPlayhead - clip.start);
+        if (Math.abs(video.currentTime - targetSourceTime) > 0.05) {
+          video.currentTime = targetSourceTime;
+        }
+      }
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [isPlaying, hasVideo]);
+
+  // Seek video when scrubbing (paused)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !hasVideo || isPlaying) return;
-    if (Math.abs(video.currentTime - playheadPosition) > 0.15) {
-      video.currentTime = playheadPosition;
+    const clip = timelineClips.find(
+      c => playheadPosition >= c.start && playheadPosition <= c.end
+    );
+    if (clip) {
+      const targetSourceTime = clip.sourceStart + (playheadPosition - clip.start);
+      if (Math.abs(video.currentTime - targetSourceTime) > 0.05) {
+        video.currentTime = targetSourceTime;
+      }
     }
-  }, [playheadPosition, hasVideo, isPlaying]);
+  }, [playheadPosition, isPlaying, hasVideo, timelineClips]);
 
   // ── Split drag ─────────────────────────────────────────────────────────────
   useEffect(() => {
