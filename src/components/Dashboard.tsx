@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp, VideoMetadata } from '../context/AppContext';
-import { Camera, FolderPlus, Upload, Shield, LogOut, Video, Trash2, Clock, Sparkles, ShoppingBag, Eye } from 'lucide-react';
+import { Camera, FolderPlus, Upload, Shield, LogOut, Video, Trash2, Clock, Sparkles, ShoppingBag, Eye, Settings } from 'lucide-react';
 import LegalModal from './LegalModal';
 
 const Dashboard: React.FC = () => {
@@ -11,7 +11,8 @@ const Dashboard: React.FC = () => {
     selectProject, 
     deleteProject, 
     createProject, 
-    exportQueue 
+    exportQueue,
+    setShowProfileSettings
   } = useApp();
 
   const [newProjName, setNewProjName] = useState('');
@@ -131,10 +132,25 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3 pl-4 border-l border-white/10">
-            <div className="text-right">
-              <p className="text-xs text-white font-medium">{user?.email}</p>
-              <p className="text-[10px] text-gray-400">Creator Account</p>
+            <div 
+              onClick={() => setShowProfileSettings(true)}
+              className="text-right cursor-pointer group hover:opacity-85 transition-opacity"
+              title="Manage Profile"
+            >
+              <p className="text-xs text-white font-bold group-hover:text-purple-400 transition-colors">
+                {user?.displayName || user?.email?.split('@')[0] || 'Creator'}
+              </p>
+              <p className="text-[9px] text-gray-400 font-medium">{user?.email}</p>
             </div>
+
+            <button 
+              onClick={() => setShowProfileSettings(true)}
+              title="Profile & Presets Settings"
+              className="h-8 w-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+
             <button 
               onClick={logout}
               title="Sign Out"

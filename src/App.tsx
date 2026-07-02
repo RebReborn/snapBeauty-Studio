@@ -4,9 +4,10 @@ import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
 import EditorWorkspace from './components/EditorWorkspace';
 import ExportModal from './components/ExportModal';
+import ProfileSettingsModal from './components/ProfileSettingsModal';
 
 const MainApp: React.FC = () => {
-  const { currentView, showExportModal } = useApp();
+  const { currentView, showExportModal, showProfileSettings } = useApp();
 
   return (
     <div className="h-screen w-screen bg-studio-darker overflow-hidden text-gray-200">
@@ -24,6 +25,7 @@ const MainApp: React.FC = () => {
 
       {/* Global Modals */}
       {showExportModal && <ExportModal />}
+      {showProfileSettings && <ProfileSettingsModal />}
     </div>
   );
 };

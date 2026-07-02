@@ -539,7 +539,16 @@ const Visualizer: React.FC = () => {
       const ratio = vw / vh;
       setCanvasSize({ w: Math.round(720 * ratio), h: 720 });
     };
-    const onError      = (e: Event) => { console.error('Video error:', e); setHasVideo(false); };
+    const onError      = (e: Event) => { 
+      const err = video.error;
+      console.error('Video error details:', {
+        code: err?.code,
+        message: err?.message,
+        src: video.src,
+        event: e
+      });
+      setHasVideo(false); 
+    };
     video.addEventListener('loadedmetadata', onMeta);
     video.addEventListener('error',          onError);
     return () => {
@@ -746,7 +755,6 @@ const Visualizer: React.FC = () => {
         playsInline
         loop={!isExporting}
         preload="auto"
-        crossOrigin="anonymous"
         muted
       />
 

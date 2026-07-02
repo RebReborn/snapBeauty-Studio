@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 import { DeterministicExporter } from '../services/DeterministicExporter';
 
@@ -161,6 +161,7 @@ export interface Lens {
   category: 'featured' | 'trending' | 'new';
   imageUrl: string;
   isDownloaded: boolean;
+  values?: BeautyValues;
 }
 
 interface AppContextType {
@@ -214,7 +215,11 @@ interface AppContextType {
   addToExportQueue: (resolution: string, format: string) => void;
   startExportRecording: (resolution: string, format: string, bitrateLevel?: string) => void;
   setShowExportModal: (show: boolean) => void;
-  downloadLens: (lensId: string) => void;
+  downloadLens: (lensId: string) => Promise<void> | void;
+  showProfileSettings: boolean;
+  setShowProfileSettings: (show: boolean) => void;
+  renamePreset: (oldName: string, newName: string) => Promise<void>;
+  updateProfileName: (newName: string) => Promise<void>;
   canUndo: boolean;
   canRedo: boolean;
   exportCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
@@ -434,6 +439,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [audioTrackClips, setAudioTrackClips] = useState<TimelineClip[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState<boolean>(false);
+  const [showProfileSettings, setShowProfileSettings] = useState<boolean>(false);
   const [useTransitions, setUseTransitions] = useState<boolean>(true);
   const [playheadPosition, setPlayheadPosition] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -622,6 +628,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const renamePreset = async (oldName: string, newName: string) => {
+    if (!newName || oldName === newName) return;
+    const presetValues = customPresets[oldName];
+    if (!presetValues) return;
+    
+    const newPresets = { ...customPresets };
+    delete newPresets[oldName];
+    newPresets[newName] = presetValues;
+    
+    setCustomPresets(newPresets);
+    if (user) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), { customPresets: newPresets }, { merge: true });
+      } catch (error) {
+        console.warn("Failed to rename preset in Firestore:", error);
+      }
+    }
+    if (activePreset === oldName) {
+      setActivePreset(newName);
+    }
+  };
+
+  const updateProfileName = async (newName: string) => {
+    if (!auth.currentUser) return;
+    try {
+      await updateProfile(auth.currentUser, { displayName: newName });
+      setUser(prev => prev ? { ...prev, displayName: newName } : null);
+    } catch (error) {
+      console.error("Failed to update profile name:", error);
+      throw error;
+    }
+  };
+
   const publishPresetToMarketplace = async (presetName: string) => {
     if (!user) return;
     const presetValues = customPresets[presetName];
@@ -631,6 +670,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newLens = {
       name: presetName,
       creator: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+      creatorId: user.uid,
       rating: 5.0,
       reviewsCount: 1,
       downloads: '0',
@@ -843,10 +883,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Lens Marketplace download
-  const downloadLens = (lensId: string) => {
+  const downloadLens = async (lensId: string) => {
+    const lens = marketplaceLenses.find(l => l.id === lensId);
+    if (!lens) return;
+
     setMarketplaceLenses(prev => 
-      prev.map(lens => lens.id === lensId ? { ...lens, isDownloaded: true } : lens)
+      prev.map(l => l.id === lensId ? { ...l, isDownloaded: true } : l)
     );
+
+    // Copy the lens values to user's customPresets in Firestore for cross-session access
+    if (lens.values) {
+      const newPresets = { ...customPresets, [lens.name]: lens.values };
+      setCustomPresets(newPresets);
+      if (user) {
+        try {
+          await setDoc(doc(db, 'users', user.uid), { customPresets: newPresets }, { merge: true });
+        } catch (error) {
+          console.warn("Failed to persist downloaded marketplace preset to Firestore:", error);
+        }
+      }
+    }
   };
 
   // Real export: captures deterministic video using WebCodecs
@@ -949,6 +1005,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteClip,
       showShortcutsHelp,
       setShowShortcutsHelp,
+      showProfileSettings,
+      setShowProfileSettings,
       useTransitions,
       setUseTransitions,
       playheadPosition,
@@ -966,6 +1024,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       applyPreset,
       savePreset,
       deletePreset,
+      renamePreset,
+      updateProfileName,
       publishPresetToMarketplace,
       customPresets,
       toggleAutoBeautify,

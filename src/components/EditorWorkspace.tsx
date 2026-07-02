@@ -7,7 +7,7 @@ import Marketplace from './Marketplace';
 import { 
   ArrowLeft, Undo2, Redo2, Sparkles, Download, 
   Video, Folder, ShoppingBag, Palette,
-  Loader2, CheckCircle, XCircle, Keyboard
+  Loader2, CheckCircle, XCircle, Keyboard, Settings
 } from 'lucide-react';
 
 const EditorWorkspace: React.FC = () => {
@@ -31,7 +31,8 @@ const EditorWorkspace: React.FC = () => {
     isPlaying,
     setIsPlaying,
     showShortcutsHelp,
-    setShowShortcutsHelp
+    setShowShortcutsHelp,
+    setShowProfileSettings
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'media' | 'presets' | 'marketplace' | 'color'>('color');
@@ -204,6 +205,14 @@ const EditorWorkspace: React.FC = () => {
             className="h-8 w-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all active:scale-[0.97]"
           >
             <Keyboard className="h-4 w-4" />
+          </button>
+
+          <button 
+            onClick={() => setShowProfileSettings(true)}
+            title="Profile & Presets Settings"
+            className="h-8 w-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all active:scale-[0.97]"
+          >
+            <Settings className="h-4 w-4" />
           </button>
 
           <span className="text-[9px] bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wider">

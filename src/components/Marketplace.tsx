@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Download, Check, Star, Search } from 'lucide-react';
 
 const Marketplace: React.FC = () => {
-  const { marketplaceLenses, downloadLens, applyPreset } = useApp();
+  const { marketplaceLenses, downloadLens, applyPreset, customPresets, activePreset } = useApp();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'featured' | 'trending' | 'new'>('featured');
@@ -15,9 +15,10 @@ const Marketplace: React.FC = () => {
     .filter(lens => lens.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const handleDownload = (lensId: string) => {
+    const lens = marketplaceLenses.find(l => l.id === lensId);
+    if (!lens) return;
     downloadLens(lensId);
-    // Automatically apply downloaded preset
-    applyPreset('Natural Beauty');
+    applyPreset(lens.name);
   };
 
   return (
@@ -100,15 +101,24 @@ const Marketplace: React.FC = () => {
                 <div className="flex items-center justify-between mt-1 pt-1 border-t border-white/5">
                   <span className="text-[10px] font-extrabold text-purple-400 font-mono">Free</span>
                   
-                  {lens.isDownloaded ? (
-                    <div className="flex items-center gap-1 text-[9px] text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
-                      <Check className="h-3 w-3" />
-                      <span>Active</span>
-                    </div>
+                  {lens.isDownloaded || (customPresets && customPresets[lens.name] !== undefined) ? (
+                    activePreset === lens.name ? (
+                      <div className="flex items-center gap-1 text-[9px] text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
+                        <Check className="h-3 w-3" />
+                        <span>Applied</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => applyPreset(lens.name)}
+                        className="px-3 py-1 rounded text-[9px] font-extrabold bg-white/5 border border-white/10 hover:bg-white/10 text-gray-200 transition-all active:scale-[0.97]"
+                      >
+                        <span>Apply</span>
+                      </button>
+                    )
                   ) : (
                     <button
                       onClick={() => handleDownload(lens.id)}
-                      className="px-3 py-1 rounded text-[9px] font-extrabold flex items-center gap-1 transition-all bg-purple-500 hover:bg-purple-600 text-white"
+                      className="px-3 py-1 rounded text-[9px] font-extrabold flex items-center gap-1 transition-all bg-purple-500 hover:bg-purple-600 text-white active:scale-[0.97]"
                     >
                       <Download className="h-2.5 w-2.5" />
                       <span>Install</span>
