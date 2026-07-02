@@ -1,7 +1,7 @@
 // BeautyEngine.ts — High-performance HTML5 Canvas 2D Beauty Processing Engine.
 
 import { LucidEngine } from './LucidEngine';
-import { BeautyValues } from '../context/AppContext';
+import { BeautyValues, TimelineClip } from '../context/AppContext';
 
 export interface Point2D {
   x: number;
@@ -49,9 +49,48 @@ export class BeautyEngine {
     const vibBase = (bv.cgVibrance || 0) * 0.5;
     const saturate = Math.max(0, 100 + satBase + vibBase);
 
-    ctx.filter = `brightness(${exposure}%) contrast(${contrast}%) saturate(${saturate}%)`;
+    let baseFilter = `brightness(${exposure}%) contrast(${contrast}%) saturate(${saturate}%)`;
+    if (bv.cgCinematicFilter === 'monochrome') {
+      baseFilter += ' grayscale(100%) contrast(115%)';
+    }
+    ctx.filter = baseFilter;
     ctx.drawImage(video, 0, 0, w, h);
     ctx.filter = 'none';
+
+    // Apply Cinematic LUTs
+    if (bv.cgCinematicFilter && bv.cgCinematicFilter !== 'none' && bv.cgCinematicFilter !== 'monochrome') {
+      ctx.save();
+      if (bv.cgCinematicFilter === 'teal-orange') {
+        ctx.globalCompositeOperation = 'color-burn';
+        ctx.fillStyle = 'rgba(0, 150, 180, 0.12)';
+        ctx.fillRect(0, 0, w, h);
+        
+        ctx.globalCompositeOperation = 'overlay';
+        ctx.fillStyle = 'rgba(255, 130, 0, 0.14)';
+        ctx.fillRect(0, 0, w, h);
+      } else if (bv.cgCinematicFilter === 'vintage') {
+        ctx.globalCompositeOperation = 'color';
+        ctx.fillStyle = 'rgba(210, 140, 70, 0.08)';
+        ctx.fillRect(0, 0, w, h);
+        
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = 'rgba(35, 25, 20, 0.06)';
+        ctx.fillRect(0, 0, w, h);
+      } else if (bv.cgCinematicFilter === 'cyberpunk') {
+        ctx.globalCompositeOperation = 'color-dodge';
+        ctx.fillStyle = 'rgba(255, 0, 200, 0.08)';
+        ctx.fillRect(0, 0, w, h);
+        
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.08)';
+        ctx.fillRect(0, 0, w, h);
+      } else if (bv.cgCinematicFilter === 'warm-gold') {
+        ctx.globalCompositeOperation = 'overlay';
+        ctx.fillStyle = 'rgba(255, 175, 20, 0.15)';
+        ctx.fillRect(0, 0, w, h);
+      }
+      ctx.restore();
+    }
 
     // Color Overlays (Temperature & Tint)
     if (bv.cgTemperature || bv.cgTint) {
@@ -160,6 +199,31 @@ export class BeautyEngine {
       ctx.fillRect(0, 0, w, h);
       ctx.restore();
     }
+  }
+
+  /**
+   * Calculates the opacity of the fade-to-black transition at clip cuts.
+   */
+  static getTransitionOpacity(time: number, clips: TimelineClip[], duration = 0.25): number {
+    if (!clips || clips.length < 2) return 0;
+    
+    // Sort clips to be safe
+    const sorted = [...clips].sort((a, b) => a.start - b.start);
+    
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const currentEnd = sorted[i].end;
+      const nextStart = sorted[i+1].start;
+      
+      // If clips are adjacent (cut without gap)
+      if (Math.abs(nextStart - currentEnd) < 0.05) {
+        const cutTime = currentEnd;
+        if (time >= cutTime - duration && time <= cutTime + duration) {
+          const delta = Math.abs(time - cutTime) / duration;
+          return Math.max(0, 1 - delta); // Peaks at 1.0 (pure black) at cutTime
+        }
+      }
+    }
+    return 0;
   }
   
   /**

@@ -260,17 +260,37 @@ const Dashboard: React.FC = () => {
                 <div 
                   key={tpl.name}
                   onClick={() => applyPresetTemplate(tpl.name, tpl.video, tpl.dur)}
+                  onMouseEnter={(e) => {
+                    const video = e.currentTarget.querySelector('video');
+                    if (video) video.play().catch(() => {});
+                  }}
+                  onMouseLeave={(e) => {
+                    const video = e.currentTarget.querySelector('video');
+                    if (video) {
+                      video.pause();
+                      video.currentTime = 0;
+                    }
+                  }}
                   className="group relative rounded-xl overflow-hidden aspect-[3/4] bg-studio-dark border border-white/5 hover:border-purple-500/50 cursor-pointer flex flex-col justify-end p-3 transition-all"
                 >
+                  {/* Dynamic Hover-Video Preview */}
+                  <video
+                    src={window.location.origin + '/videos/' + tpl.video}
+                    muted
+                    loop
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-cover z-0 opacity-40 group-hover:opacity-75 transition-opacity duration-300 pointer-events-none"
+                  />
+
                   {/* Decorative Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-0 group-hover:scale-105 transition-transform" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/45 to-transparent z-10 group-hover:scale-105 transition-transform pointer-events-none" />
                   
                   {/* Aspect Icon Indicator */}
-                  <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/75 border border-white/10">
+                  <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/75 border border-white/10 z-20">
                     <Eye className="h-3 w-3" />
                   </div>
-
-                  <div className="relative z-10 space-y-1">
+ 
+                  <div className="relative z-20 space-y-1">
                     <span className="text-[9px] text-purple-400 font-bold tracking-wider uppercase">{tpl.label}</span>
                     <h3 className="text-xs font-bold text-white leading-tight group-hover:text-purple-300 transition-colors">{tpl.name}</h3>
                   </div>

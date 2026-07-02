@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Scissors, ZoomIn, ZoomOut, Play, Pause, 
-  Volume2, Video 
+  Volume2, Video, Sparkles, Trash2 
 } from 'lucide-react';
 
 const Timeline: React.FC = () => {
@@ -17,7 +17,12 @@ const Timeline: React.FC = () => {
     splitClip, 
     trimClip,
     zoomLevel, 
-    setZoomLevel 
+    setZoomLevel,
+    selectedClipId,
+    setSelectedClipId,
+    deleteClip,
+    useTransitions,
+    setUseTransitions
   } = useApp();
 
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -154,6 +159,44 @@ const Timeline: React.FC = () => {
             <Scissors className="h-3.5 w-3.5 text-gray-400" />
             <span>Split Clip</span>
           </button>
+
+          {/* Transitions Toggle */}
+          <button
+            onClick={() => setUseTransitions(!useTransitions)}
+            className={`h-7 px-3.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 active:scale-[0.97] transition-all ${
+              useTransitions 
+                ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border-purple-500/30' 
+                : 'bg-white/5 hover:bg-white/10 text-gray-400 border-white/5'
+            }`}
+            title="Toggle automatic dip-to-black transitions on clip cuts"
+          >
+            <Sparkles className={`h-3.5 w-3.5 ${useTransitions ? 'text-purple-400' : 'text-gray-500'}`} />
+            <span>Transitions: {useTransitions ? 'ON' : 'OFF'}</span>
+          </button>
+
+          {/* Delete selected clip */}
+          {selectedClipId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); deleteClip(selectedClipId, false); }}
+              className="h-7 px-3 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/20 text-xs font-bold flex items-center gap-1.5 active:scale-[0.97] transition-all"
+              title="Delete clip (leaves a gap)"
+            >
+              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+              <span>Delete</span>
+            </button>
+          )}
+
+          {/* Ripple Delete selected clip */}
+          {selectedClipId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); deleteClip(selectedClipId, true); }}
+              className="h-7 px-3 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 text-orange-300 border border-orange-500/20 text-xs font-bold flex items-center gap-1.5 active:scale-[0.97] transition-all"
+              title="Ripple delete (closes the gap)"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-orange-400" />
+              <span>Ripple Delete</span>
+            </button>
+          )}
         </div>
 
         {/* Zoom Scrubber controls */}
@@ -173,7 +216,10 @@ const Timeline: React.FC = () => {
       </div>
 
       {/* Tracks & Ruler container */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden flex flex-col relative">
+      <div 
+        onClick={() => setSelectedClipId(null)}
+        className="flex-1 overflow-x-auto overflow-y-hidden flex flex-col relative"
+      >
         
         {/* Grid Background */}
         <div 
@@ -204,36 +250,44 @@ const Timeline: React.FC = () => {
 
             {/* Video Clips layout */}
             <div className="h-full relative flex-1">
-              {timelineClips.map((clip) => (
-                <div
-                  key={clip.id}
-                  className="absolute h-full rounded-lg bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/30 overflow-hidden flex items-center justify-between p-2 select-none group"
-                  style={{
-                    left: `${clip.start * pxPerSec}px`,
-                    width: `${(clip.end - clip.start) * pxPerSec}px`,
-                  }}
-                >
-                  {/* Left Trim Handle */}
-                  <div 
-                    onMouseDown={(e) => handleTrimStart(clip.id, e)}
-                    className="absolute left-0 top-0 bottom-0 w-2.5 bg-purple-500/70 cursor-w-resize rounded-l-md hover:bg-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  />
+              {timelineClips.map((clip) => {
+                const isSelected = selectedClipId === clip.id;
+                return (
+                  <div
+                    key={clip.id}
+                    onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); }}
+                    className={`absolute h-full rounded-lg overflow-hidden flex items-center justify-between p-2 select-none group cursor-pointer transition-all ${
+                      isSelected 
+                        ? 'bg-gradient-to-r from-purple-800/80 to-pink-800/80 border-2 border-purple-400 shadow-lg shadow-purple-500/20 z-20 scale-[0.98]' 
+                        : 'bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/20 hover:border-purple-500/40 z-10'
+                    }`}
+                    style={{
+                      left: `${clip.start * pxPerSec}px`,
+                      width: `${(clip.end - clip.start) * pxPerSec}px`,
+                    }}
+                  >
+                    {/* Left Trim Handle */}
+                    <div 
+                      onMouseDown={(e) => handleTrimStart(clip.id, e)}
+                      className="absolute left-0 top-0 bottom-0 w-2.5 bg-purple-500/70 cursor-w-resize rounded-l-md hover:bg-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    />
 
-                  {/* Clip Label */}
-                  <div className="text-[10px] font-semibold text-white px-2 truncate leading-tight select-none">
-                    {activeProject?.video?.name || 'video_layer.mp4'} 
-                    <span className="text-gray-400 font-normal ml-1">
-                      [src: {formatTimeText(clip.sourceStart)} - {formatTimeText(clip.sourceEnd)}]
-                    </span>
+                    {/* Clip Label */}
+                    <div className="text-[10px] font-semibold text-white px-2 truncate leading-tight select-none">
+                      {activeProject?.video?.name || 'video_layer.mp4'} 
+                      <span className="text-gray-400 font-normal ml-1">
+                        [src: {formatTimeText(clip.sourceStart)} - {formatTimeText(clip.sourceEnd)}]
+                      </span>
+                    </div>
+
+                    {/* Right Trim Handle */}
+                    <div 
+                      onMouseDown={(e) => handleTrimEnd(clip.id, e)}
+                      className="absolute right-0 top-0 bottom-0 w-2.5 bg-purple-500/70 cursor-e-resize rounded-r-md hover:bg-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    />
                   </div>
-
-                  {/* Right Trim Handle */}
-                  <div 
-                    onMouseDown={(e) => handleTrimEnd(clip.id, e)}
-                    className="absolute right-0 top-0 bottom-0 w-2.5 bg-purple-500/70 cursor-e-resize rounded-r-md hover:bg-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
 
           </div>

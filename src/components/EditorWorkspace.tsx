@@ -7,7 +7,7 @@ import Marketplace from './Marketplace';
 import { 
   ArrowLeft, Undo2, Redo2, Sparkles, Download, 
   Video, Folder, ShoppingBag, Palette,
-  Loader2, CheckCircle, XCircle
+  Loader2, CheckCircle, XCircle, Keyboard
 } from 'lucide-react';
 
 const EditorWorkspace: React.FC = () => {
@@ -21,10 +21,112 @@ const EditorWorkspace: React.FC = () => {
     isAutoBeautifyActive, 
     toggleAutoBeautify, 
     setShowExportModal,
-    exportQueue
+    exportQueue,
+    timelineClips,
+    splitClip,
+    deleteClip,
+    selectedClipId,
+    playheadPosition,
+    setPlayheadPosition,
+    isPlaying,
+    setIsPlaying,
+    showShortcutsHelp,
+    setShowShortcutsHelp
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'media' | 'presets' | 'marketplace' | 'color'>('color');
+
+  // Keyboard Shortcuts Hook
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore shortcuts if the user is typing in a text input or textarea
+      if (
+        e.target instanceof HTMLInputElement || 
+        e.target instanceof HTMLTextAreaElement || 
+        (e.target instanceof HTMLElement && e.target.getAttribute('contenteditable') === 'true')
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      // Undo / Redo (Ctrl+Z / Ctrl+Y)
+      if ((e.ctrlKey || e.metaKey) && key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (canRedo) redo();
+        } else {
+          if (canUndo) undo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && key === 'y') {
+        e.preventDefault();
+        if (canRedo) redo();
+      }
+
+      // Play / Pause (Space)
+      else if (e.key === ' ') {
+        e.preventDefault();
+        setIsPlaying(!isPlaying);
+      }
+
+      // Split Clip (C or c)
+      else if (key === 'c') {
+        e.preventDefault();
+        splitClip();
+      }
+
+      // Delete Clip (Delete or Backspace)
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedClipId) {
+          e.preventDefault();
+          // Default to normal delete
+          deleteClip(selectedClipId, false);
+        }
+      }
+
+      // Frame Nudge Left (Arrow Left: -1 frame = -1/30th sec)
+      else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const nextTime = Math.max(0, playheadPosition - 1 / 30);
+        setPlayheadPosition(nextTime);
+      }
+
+      // Frame Nudge Right (Arrow Right: +1 frame = +1/30th sec)
+      else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const maxDuration = timelineClips.length > 0 
+          ? Math.max(...timelineClips.map(c => c.end)) 
+          : (activeProject?.video?.duration || 0);
+        const nextTime = Math.min(maxDuration, playheadPosition + 1 / 30);
+        setPlayheadPosition(nextTime);
+      }
+
+      // Help Modal (H or h or ?)
+      else if (key === 'h' || e.key === '?') {
+        e.preventDefault();
+        setShowShortcutsHelp(!showShortcutsHelp);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isPlaying,
+    setIsPlaying,
+    splitClip,
+    selectedClipId,
+    deleteClip,
+    playheadPosition,
+    setPlayheadPosition,
+    timelineClips,
+    activeProject,
+    showShortcutsHelp,
+    setShowShortcutsHelp,
+    canUndo,
+    canRedo,
+    undo,
+    redo
+  ]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-studio-darker overflow-hidden text-gray-200 select-none font-sans relative">
@@ -96,6 +198,14 @@ const EditorWorkspace: React.FC = () => {
 
         {/* Right Side: Pro badge and Export */}
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowShortcutsHelp(true)}
+            title="Keyboard Shortcuts Guide (H)"
+            className="h-8 w-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all active:scale-[0.97]"
+          >
+            <Keyboard className="h-4 w-4" />
+          </button>
+
           <span className="text-[9px] bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wider">
             Premium Mode
           </span>
@@ -251,6 +361,57 @@ const EditorWorkspace: React.FC = () => {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Keyboard Shortcuts Help Modal */}
+      {showShortcutsHelp && (
+        <div 
+          onClick={() => setShowShortcutsHelp(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} // Prevent closing
+            className="bg-studio-dark border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-fade-in cursor-default"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Keyboard className="h-5 w-5 text-purple-400" />
+                <h3 className="text-white font-bold text-base font-sans">Keyboard Shortcuts</h3>
+              </div>
+              <button 
+                onClick={() => setShowShortcutsHelp(false)}
+                className="text-gray-400 hover:text-white text-sm font-bold bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-md transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <p className="text-gray-400 text-[11px] mb-5">Speed up your workflow using SnapBeauty editor shortcuts:</p>
+            
+            <div className="space-y-3 font-sans">
+              {[
+                { keys: ['Space'], desc: 'Play / Pause video playback' },
+                { keys: ['C'], desc: 'Split / Cut active clip at playhead' },
+                { keys: ['Delete', 'Backspace'], desc: 'Delete currently selected clip' },
+                { keys: ['←', '→'], desc: 'Nudge playhead frame-by-frame (1/30s)' },
+                { keys: ['Ctrl', 'Z'], desc: 'Undo last action' },
+                { keys: ['Ctrl', 'Y'], desc: 'Redo last undone action' },
+                { keys: ['H'], desc: 'Toggle this Shortcuts Guide' }
+              ].map((shortcut, i) => (
+                <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-white/5">
+                  <span className="text-gray-300 font-medium">{shortcut.desc}</span>
+                  <div className="flex gap-1.5">
+                    {shortcut.keys.map((k) => (
+                      <kbd key={k} className="px-2 py-0.5 bg-black/60 border border-white/10 rounded text-[10px] text-purple-300 font-bold font-mono">
+                        {k}
+                      </kbd>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

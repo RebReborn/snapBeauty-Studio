@@ -11,6 +11,7 @@ export interface ExportOptions {
   resolution: string; // e.g., '1080p', '4K'
   fps?: number;
   timelineClips: TimelineClip[];
+  useTransitions?: boolean;
   onProgress: (progress: number) => void;
   onComplete: (downloadUrl: string, fileName: string) => void;
   onError: (err: any) => void;
@@ -72,6 +73,7 @@ export class DeterministicExporter {
       resolution, 
       fps = 30, 
       timelineClips = [],
+      useTransitions = true,
       onProgress, 
       onComplete, 
       onError, 
@@ -295,6 +297,7 @@ export class DeterministicExporter {
       // WebCodecs Decoded Frames sliding window state
       const decodedFramesQueue: DecodedFrameItem[] = [];
       let isFinishedDecoding = false;
+      let isDraining = false;
       let pendingFramesCount = 0;
       let resumeDecoding: (() => void) | null = null;
       let isProcessing = false;
@@ -320,7 +323,7 @@ export class DeterministicExporter {
               break;
             }
 
-            if (!isFinishedDecoding && decodedFramesQueue.length < 2) {
+            if (!isFinishedDecoding && !isDraining && decodedFramesQueue.length < 2) {
               break;
             }
 
@@ -369,6 +372,17 @@ export class DeterministicExporter {
                 next: nextItem.canvas
               }
             );
+
+            // Apply Transition overlay
+            if (useTransitions) {
+              const transOpacity = BeautyEngine.getTransitionOpacity(currentItem.timestamp, clips);
+              if (transOpacity > 0) {
+                ctx.save();
+                ctx.fillStyle = `rgba(0, 0, 0, ${transOpacity})`;
+                ctx.fillRect(0, 0, width, height);
+                ctx.restore();
+              }
+            }
 
             // Encode the final rendered frame
             const timestampUs = Math.round(currentItem.timestamp * 1e6);
@@ -519,10 +533,13 @@ export class DeterministicExporter {
         }
 
         // Wait for decoder to flush and queue to drain completely before starting next clip
+        isDraining = true;
         await decoder.flush();
+        await processQueue();
         while (decodedFramesQueue.length > 0 || isProcessing) {
           await new Promise(resolve => setTimeout(resolve, 10));
         }
+        isDraining = false;
 
         currentTimelineTime = clip.end;
       }

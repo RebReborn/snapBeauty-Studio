@@ -102,6 +102,7 @@ export interface BeautyValues {
   cgClarity: number;
   cgSharpening: number;
   cgVignette: number;
+  cgCinematicFilter: 'none' | 'teal-orange' | 'vintage' | 'cyberpunk' | 'warm-gold' | 'monochrome';
   
   // Color Grading (Face Only)
   faceWarmth: number;
@@ -172,6 +173,13 @@ interface AppContextType {
   activePreset: string;
   timelineClips: TimelineClip[];
   audioTrackClips: TimelineClip[];
+  selectedClipId: string | null;
+  setSelectedClipId: (id: string | null) => void;
+  deleteClip: (clipId: string, ripple?: boolean) => void;
+  showShortcutsHelp: boolean;
+  setShowShortcutsHelp: (show: boolean) => void;
+  useTransitions: boolean;
+  setUseTransitions: (active: boolean) => void;
   playheadPosition: number; // seconds
   isPlaying: boolean;
   zoomLevel: number;
@@ -293,6 +301,7 @@ const defaultBeautyValues: BeautyValues = {
   lucidDehalo: 0,
   lucidAntiAliasDeblur: 0,
   lucidAddNoise: 0,
+  cgCinematicFilter: 'none',
 };
 
 const presets: Record<string, Partial<BeautyValues>> = {
@@ -423,6 +432,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Timeline States
   const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
   const [audioTrackClips, setAudioTrackClips] = useState<TimelineClip[]>([]);
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState<boolean>(false);
+  const [useTransitions, setUseTransitions] = useState<boolean>(true);
   const [playheadPosition, setPlayheadPosition] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(50);
@@ -673,6 +685,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setHistoryIndex(prevIdx);
       setBeautyValues({ ...history[prevIdx].beauty });
       setTimelineClips([...history[prevIdx].clips]);
+      setAudioTrackClips([...history[prevIdx].clips]);
     }
   };
 
@@ -682,6 +695,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setHistoryIndex(nextIdx);
       setBeautyValues({ ...history[nextIdx].beauty });
       setTimelineClips([...history[nextIdx].clips]);
+      setAudioTrackClips([...history[nextIdx].clips]);
     }
   };
 
@@ -719,6 +733,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ];
 
       setTimelineClips(newClips);
+      setAudioTrackClips(newClips);
       pushToHistory(beautyValues, newClips);
     }
   };
@@ -748,6 +763,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     setTimelineClips(newClips);
+    setAudioTrackClips(newClips);
+    pushToHistory(beautyValues, newClips);
+  };
+
+  const deleteClip = (clipId: string, ripple = false) => {
+    const clipIdx = timelineClips.findIndex(c => c.id === clipId);
+    if (clipIdx === -1) return;
+
+    const deleted = timelineClips[clipIdx];
+    const duration = deleted.end - deleted.start;
+
+    let newClips: TimelineClip[] = [];
+    if (ripple) {
+      // Ripple delete: remove clip and shift all subsequent clips left to close the gap
+      newClips = timelineClips
+        .filter(c => c.id !== clipId)
+        .map(c => c.start > deleted.start 
+          ? { ...c, start: c.start - duration, end: c.end - duration } 
+          : c
+        );
+    } else {
+      // Standard delete: leave a blank gap
+      newClips = timelineClips.filter(c => c.id !== clipId);
+    }
+
+    setTimelineClips(newClips);
+    setAudioTrackClips(newClips);
+    setSelectedClipId(null);
     pushToHistory(beautyValues, newClips);
   };
 
@@ -818,6 +861,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setIsExporting(true);
     setExportResolution(resolution);
+    setIsPlaying(false);
 
     const projectName = activeProject.name;
     const newExport: ExportItem = {
@@ -845,6 +889,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         projectName: projectName,
         fps: 30, // Locked to 30fps for stable quality
         timelineClips: timelineClips,
+        useTransitions: useTransitions,
         sourceFile: activeProject.video?.file,
         onProgress: (pct) => {
           setExportQueue(prev =>
@@ -899,6 +944,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activePreset,
       timelineClips,
       audioTrackClips,
+      selectedClipId,
+      setSelectedClipId,
+      deleteClip,
+      showShortcutsHelp,
+      setShowShortcutsHelp,
+      useTransitions,
+      setUseTransitions,
       playheadPosition,
       isPlaying,
       zoomLevel,

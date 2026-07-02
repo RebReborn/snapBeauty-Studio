@@ -233,6 +233,7 @@ const Visualizer: React.FC = () => {
     exportCanvasRef, exportVideoRef,
     isExporting, exportResolution,
     timelineClips,
+    useTransitions,
   } = useApp();
 
   // ── Refs ──────────────────────────────────────────────────────────────────
@@ -427,6 +428,16 @@ const Visualizer: React.FC = () => {
             ctx.restore();
           }
 
+          if (useTransitionsRef.current) {
+            const transOpacity = BeautyEngine.getTransitionOpacity(playheadPositionRef.current, timelineClipsRef.current);
+            if (transOpacity > 0) {
+              ctx.save();
+              ctx.fillStyle = `rgba(0, 0, 0, ${transOpacity})`;
+              ctx.fillRect(0, 0, w, h);
+              ctx.restore();
+            }
+          }
+
           // Update face detected badge safely
           const hasFace = !!faceBox;
           if (faceDetected !== hasFace) {
@@ -541,11 +552,13 @@ const Visualizer: React.FC = () => {
   const isPlayingRef = useRef(isPlaying);
   const playheadPositionRef = useRef(playheadPosition);
   const timelineClipsRef = useRef(timelineClips);
+  const useTransitionsRef = useRef(useTransitions);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
     timelineClipsRef.current = timelineClips;
-  }, [isPlaying, timelineClips]);
+    useTransitionsRef.current = useTransitions;
+  }, [isPlaying, timelineClips, useTransitions]);
 
   useEffect(() => {
     playheadPositionRef.current = playheadPosition;
@@ -622,6 +635,9 @@ const Visualizer: React.FC = () => {
         
         requestAnimationFrame(syncTick);
       } else {
+        if (!video.paused) {
+          video.pause();
+        }
         // Paused/Scrubbing: Sync video currentTime to match currentPlayhead if it changed
         const clip = clips.find(
           c => currentPlayhead >= c.start && currentPlayhead <= c.end
@@ -640,6 +656,9 @@ const Visualizer: React.FC = () => {
       lastTime = performance.now();
       requestAnimationFrame(syncTick);
     } else {
+      if (!video.paused) {
+        video.pause();
+      }
       // Sync once on pause/scrub
       const clips = timelineClipsRef.current;
       const currentPlayhead = playheadPositionRef.current;

@@ -500,6 +500,48 @@ const BeautyControls: React.FC = () => {
           )}
         </div>
 
+        {/* SECTION: Cinematic Color Filters */}
+        <div className="rounded-xl border border-white/5 overflow-hidden bg-white/1">
+          <button 
+            onClick={() => toggleSection('cinematic-filters')}
+            className="w-full p-3 flex items-center justify-between text-left hover:bg-white/2 transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <Palette className="h-4 w-4 text-purple-400" />
+              <span className="text-xs font-bold text-white">Cinematic LUT Filters</span>
+            </div>
+            {expandedSection === 'cinematic-filters' ? <ChevronUp className="h-3.5 w-3.5 text-gray-400" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-400" />}
+          </button>
+          
+          {expandedSection === 'cinematic-filters' && (
+            <div className="p-3 border-t border-white/5 bg-studio-dark/30 space-y-4 animate-fade-in">
+              <span className="text-[11px] font-medium text-gray-300">Choose a Color Palette</span>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'none', label: 'None (Original)', style: 'bg-white/5 text-gray-300 border border-white/10' },
+                  { id: 'teal-orange', label: 'Teal & Orange', style: 'bg-gradient-to-br from-teal-900/50 to-orange-950/50 text-orange-200 border border-orange-500/30' },
+                  { id: 'vintage', label: 'Retro Vintage', style: 'bg-gradient-to-br from-amber-950/50 to-yellow-950/50 text-amber-200 border border-amber-600/30' },
+                  { id: 'cyberpunk', label: 'Cyberpunk Neon', style: 'bg-gradient-to-br from-purple-950/50 to-cyan-950/50 text-pink-300 border border-purple-500/30' },
+                  { id: 'warm-gold', label: 'Warm Sunset', style: 'bg-gradient-to-br from-yellow-900/50 to-orange-900/50 text-yellow-100 border border-yellow-500/30' },
+                  { id: 'monochrome', label: 'Noir (Grayscale)', style: 'bg-gradient-to-br from-gray-800/50 to-black/50 text-white border border-gray-600/30' }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => updateBeautyValue('cgCinematicFilter', item.id)}
+                    className={`py-2 px-2.5 rounded-lg text-[10px] font-bold text-center transition-all hover:scale-[1.02] active:scale-[0.98] ${item.style} ${
+                      beautyValues.cgCinematicFilter === item.id 
+                        ? 'ring-2 ring-purple-500 ring-offset-1 ring-offset-studio-dark scale-[1.03]' 
+                        : 'opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* SECTION: Face Color Aesthetics */}
         <div className="rounded-xl border border-white/5 overflow-hidden bg-white/1">
           <button 
