@@ -1,57 +1,68 @@
-# 🎨 SnapBeauty Studio (Beta)
+# SnapBeauty Studio
 
-SnapBeauty Studio is a professional-grade, AI-powered web application for real-time video beauty enhancements, digital makeup application, and facial color grading. Built with a modern React stack, it leverages state-of-the-art WebAssembly AI models and WebCodecs to run entirely in the browser, ensuring complete user privacy and zero server-side rendering latency.
+SnapBeauty Studio is a professional-grade, AI-powered web application for real-time video beauty enhancements, digital makeup application, and facial color grading. Built with a modern React stack, it leverages state-of-the-art WebAssembly AI models, the WebCodecs API, and GPU-accelerated rendering pipelines to run entirely in-browser, ensuring complete user privacy and zero server-side latency.
 
-## ✨ Features
+## Key Features
 
-### 🤖 Core AI Engines
-*   **468-Point FaceMesh**: Uses Google's MediaPipe Face Landmarker model running on WebGL/WASM to track complex facial geometry at 60 FPS.
-*   **Semantic Background Segmentation**: Integrates a background and selfie segmentation model to accurately map the hairline, face, and background, allowing for pristine, edge-perfect masking.
-*   **Lucid Temporal Engine**: A custom spatial-temporal processing layer that stabilizes video noise, recovers compression artifacts, and performs 3x3 high-fidelity convolution sharpening across sequential video frames.
+### Core AI Engine
+* **468-Point FaceMesh**: Utilizes Google MediaPipe Face Landmarker models executing on WebGL/WASM delegates to track facial geometry at 60 FPS.
+* **Semantic Background Segmentation**: Integrates selfie and background segmentation masks to separate the subject from their surroundings with edge-accurate masking.
+* **Lucid Detail & Clarity Engine**: A custom spatial-temporal processing pipeline designed to stabilize sensor noise, reduce compression artifacts, and perform high-fidelity sharpening passes.
 
-### 🧖‍♀️ Skin & Feature Retouching
-*   **Skin Smoothing**: Dynamic gaussian blur masking with acne and shine reduction.
-*   **Chroma-Key Body Retouching**: Hardware-accelerated color-key isolation to dynamically detect, mask, and smooth the subject's body skin independently of the face and clothes.
-*   **Geometry Sculpting**: Slimmer jawlines, plumper lips, and nose refinement using high-performance 2D slice-warping to physically alter geometry on the canvas.
-*   **Brightening**: Teeth whitening and eye sclera brightening masks.
+### Retouching and Sculpting
+* **Skin Retouching**: Dynamic skin smoothing utilizing adaptive Gaussian blur masks combined with acne and shine reduction.
+* **Chroma-Key Body Smoothing**: Hardware-accelerated color-key isolation to dynamically smooth subject body skin independently of facial details or clothing.
+* **Facial Sculpting**: Performs physical geometry alterations (jawline slimming, eye enlargement, lip plumping, and nose bridge resizing) using real-time 2D slice-warping algorithms.
+* **Feature Brightening**: Sclera (eye) and teeth brightening masks dynamically tracked to the facial landmarks.
 
-### 🎞️ Cinematic & Temporal Filtering
-*   **Temporal Noise Reduction**: Multi-frame sampling to stabilize sensor noise and revert video compression artifacts without introducing ghosting.
-*   **Spatial Convolution**: High-fidelity 3x3 sharpening kernels and anti-aliasing passes to recover lost details.
-*   **Dehalo & Texture Recovery**: Edge brightness damping combined with unaltered source-interpolation to maintain natural skin textures.
-*   **Film Grain**: Procedural sensor grain generation for an authentic, cinematic finish.
+### Digital Makeup Suite
+Procedural cosmetic overlays mapped onto 3D facial topography:
+* **Lip Enhancements**: Plumpness adjustments, definition rendering, and color tinting with selectable finishes including Matte, Sheen, and High-Gloss Specular Highlights.
+* **Eye Styling**: Procedural mascara lashes, Bezier-mapped eyeshadow gradients, and crisp eyeliner strokes.
+* **Face Contour & Blush**: Cheekbone blush gradients and jaw/nose bridge depth contouring.
 
-### 📷 G7X Signature Aesthetic
-*   **Flash Simulation**: Simulates the iconic "G7X Flash" look with dynamic subject contrasting and highlight blooming.
-*   **Background Dimming**: Applies inverse-square law approximations to isolate the subject from the background using the Semantic Segmentation mask.
-*   **Film Grain & Color Shift**: Emulates authentic camera sensor noise and cool-shadow filmic color grades.
+### Timeline Editing Suite
+* **Frame-Accurate Seek Sync Loop**: Synchronizes timeline playhead offsets precisely with the source video's frames to avoid decoding lag.
+* **Non-Destructive Splitting**: Instantly cuts clips at the playhead without re-encoding, modifying timeline structures dynamically.
+* **Trim and Delete Controls**: Supports left/right edge trimming, clip deletions, and ripple deletes to automatically close timeline gaps.
+* **Dip-to-Black Transitions**: Supports automatic parabolic fade-to-black transitions at clip boundaries.
 
-### 💄 Digital Makeup Suite
-A comprehensive suite of customizable procedural cosmetic overlays mapped directly to 3D facial topography:
-*   **Lip Enhancements**: Plumpness, lip definition mapping, and tinting with dynamic texture finishes (Matte, Sheen, High-Gloss Specular Highlights).
-*   **Eyes & Lashes**: Procedurally generated 2D mascara lashes, bezier-mapped eyeshadow, and crisp eyeliner strokes.
-*   **Face Contouring**: Blush gradients mapped to the cheekbones and depth contouring along the jaw and nose bridge.
+### Cinematic Tones & LUT Filters
+* **Color Grading**: Global controls for exposure, contrast, highlights, shadows, temperature, tint, and vibrance.
+* **Cinematic LUT Tones**: Pre-compiled Lookup Table overlays including:
+  * **Teal & Orange**: Classic Hollywood cinematic contrast.
+  * **Retro Vintage**: Nostalgic film aesthetics.
+  * **Cyberpunk Neon**: High-contrast violet and cyan tones.
+  * **Warm Sunset**: Warm golden highlights.
+  * **Noir Monochrome**: Deep, high-contrast grayscale.
 
-### 🎥 Deterministic WebCodecs Exporting
-*   Exports perfectly stable, high-fidelity `H264` MP4 video directly from the browser using the native `WebCodecs API` and `mp4-muxer`.
-*   Uses a fully deterministic rendering loop that pauses the video decoder frame-by-frame, ensuring zero frame drops regardless of AI processing time.
-*   Synchronously encodes standard `AAC` audio streams extracted directly from the video buffer.
+### Deterministic WebCodecs Exporting
+* Compiles timeline sequences into high-quality H.264 MP4 videos directly in the browser via the WebCodecs API and `mp4-muxer`.
+* Operates on a deterministic rendering loop that processes frame-by-frame, ensuring zero frame drops regardless of CPU/GPU processing loads.
+* Demuxes and encodes standard AAC audio tracks synced with the exported video timeline.
 
-### 💾 Custom Presets & Global Marketplace
-*   Save your exact mix of makeup, geometry modifications, and color grades as a Custom Preset to your local workspace.
-*   Publish your creations to the Global Marketplace to share with other creators via Firebase Firestore.
+### Preset Templates and Community Marketplace
+* **Personal Presets**: Save custom slider configurations locally and sync them to Firestore for cross-session access.
+* **Community Marketplace**: Publish custom presets to the community store. Users can download published lenses, which instantly saves them to their account presets.
 
-## 🚀 Tech Stack
+### Keyboard Shortcuts
+* `Space`: Toggle play/pause playback.
+* `C` / `c`: Split active clip at playhead position.
+* `Delete` / `Backspace`: Remove currently selected clip.
+* `ArrowLeft` / `ArrowRight`: Nudge playhead frame-by-frame (+/- 1/30s).
+* `Ctrl + Z` / `Ctrl + Y`: Undo/Redo edits.
+* `H` / `h`: Toggle keyboard shortcuts guide panel.
 
-*   **Frontend Framework**: React 18 with Vite
-*   **Styling**: TailwindCSS
-*   **Icons**: Lucide React
-*   **AI Backend**: `@mediapipe/tasks-vision` (WebAssembly / WebGL Delegate)
-*   **Rendering Pipeline**: HTML5 `<canvas>` API with custom convolution filters
-*   **Video Encoding**: `WebCodecs API` & `mp4-muxer`
-*   **Backend & Hosting**: Google Firebase (Firestore, Auth, Hosting)
+## Technical Architecture & Setup
 
-## 🛠️ Local Development
+### Technology Stack
+* **Framework**: React 18 with Vite
+* **Styling**: TailwindCSS & Custom CSS
+* **Database & Authentication**: Firebase Auth and Firestore
+* **AI Processing**: `@mediapipe/tasks-vision`
+* **Video Muxing**: `mp4-muxer` & `web-demuxer`
+
+### Getting Started
 
 1. **Clone the repository:**
    ```bash
@@ -69,13 +80,16 @@ A comprehensive suite of customizable procedural cosmetic overlays mapped direct
    npm run dev
    ```
 
-4. **Build for production:**
+4. **Compile the production build:**
    ```bash
    npm run build
    ```
 
-## 🔒 Privacy First
-Unlike traditional cloud-based rendering solutions, SnapBeauty Studio runs **100% locally** in the user's browser. No video frames are ever uploaded to a server for processing, guaranteeing total user privacy.
+5. **Deploy security rules and build to Firebase:**
+   ```bash
+   npx firebase deploy
+   ```
 
----
-*Built with ❤️ for creators.*
+## Privacy & Security
+
+SnapBeauty Studio executes all media decoding, AI processing, and encoding locally on the client's machine. No video files or frames are uploaded to external servers, providing an inherently secure and private editing environment.
