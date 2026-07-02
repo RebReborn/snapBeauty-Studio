@@ -101,8 +101,8 @@ const Dashboard: React.FC = () => {
       resolution: '1920×1080 (1080p)',
       fps: 30,
       duration,
-      size: '48 MB',
-      url: ''
+      size: '1.8 MB',
+      url: window.location.origin + '/videos/' + videoName
     };
     createProject(name, videoData);
   };
@@ -252,10 +252,10 @@ const Dashboard: React.FC = () => {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { name: 'Natural Beauty', video: 'natural_beauty.mp4', label: 'Daily Vlog', dur: 15 },
-                { name: 'Bridal Glow', video: 'wedding_portrait.mp4', label: 'Wedding Shoot', dur: 30 },
-                { name: 'TikTok Creator', video: 'dance_clip.mp4', label: 'Short Video', dur: 60 },
-                { name: 'Snapchat Beauty', video: 'snap_lens.mp4', label: 'Extreme Smooth', dur: 20 }
+                { name: 'Natural Beauty', video: 'natural_beauty.mp4', label: 'Daily Vlog', dur: 7 },
+                { name: 'Bridal Glow', video: 'wedding_portrait.mp4', label: 'Wedding Shoot', dur: 7 },
+                { name: 'TikTok Creator', video: 'dance_clip.mp4', label: 'Short Video', dur: 27 },
+                { name: 'Snapchat Beauty', video: 'snap_lens.mp4', label: 'Extreme Smooth', dur: 7 }
               ].map((tpl) => (
                 <div 
                   key={tpl.name}
