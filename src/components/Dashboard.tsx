@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp, VideoMetadata } from '../context/AppContext';
-import { Camera, FolderPlus, Upload, Shield, LogOut, Video, Trash2, Clock, Sparkles, ShoppingBag, Eye, Settings } from 'lucide-react';
+import { Camera, FolderPlus, Upload, Shield, LogOut, Video, Trash2, Clock, Sparkles, ShoppingBag, Eye, Settings, Lightbulb } from 'lucide-react';
 import LegalModal from './LegalModal';
 
 const Dashboard: React.FC = () => {
@@ -12,7 +12,8 @@ const Dashboard: React.FC = () => {
     deleteProject, 
     createProject, 
     exportQueue,
-    setShowProfileSettings
+    setShowProfileSettings,
+    setView
   } = useApp();
 
   const [newProjName, setNewProjName] = useState('');
@@ -126,6 +127,15 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setView('ideas')}
+            className="h-8 px-3.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/40 text-purple-300 text-xs font-bold flex items-center gap-1.5 active:scale-[0.97] transition-all"
+            title="Browse Community Feedback and Feature Requests"
+          >
+            <Lightbulb className="h-3.5 w-3.5 text-purple-400" />
+            <span>Ideas Board</span>
+          </button>
+
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold animate-pulse">
             <Shield className="h-3.5 w-3.5 fill-purple-500/10" />
             <span>Full Access Active</span>

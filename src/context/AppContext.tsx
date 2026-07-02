@@ -166,7 +166,7 @@ export interface Lens {
 
 interface AppContextType {
   user: User | null;
-  currentView: 'auth' | 'dashboard' | 'editor' | 'marketplace';
+  currentView: 'auth' | 'dashboard' | 'editor' | 'marketplace' | 'ideas';
   projects: Project[];
   activeProject: Project | null;
   beautyValues: BeautyValues;
@@ -194,7 +194,7 @@ interface AppContextType {
   logout: () => void;
   register: (email: string) => void;
   upgradeToPro: () => void;
-  setView: (view: 'auth' | 'dashboard' | 'editor' | 'marketplace') => void;
+  setView: (view: 'auth' | 'dashboard' | 'editor' | 'marketplace' | 'ideas') => void;
   createProject: (name: string, video: VideoMetadata | null) => Project;
   selectProject: (projectId: string) => void;
   deleteProject: (projectId: string) => void;
@@ -421,7 +421,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Authentication States
   const [user, setUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<'auth' | 'dashboard' | 'editor' | 'marketplace'>('auth');
+  const [currentView, setCurrentView] = useState<'auth' | 'dashboard' | 'editor' | 'marketplace' | 'ideas'>('auth');
 
   // Projects State
   const [projects, setProjects] = useState<Project[]>([]);

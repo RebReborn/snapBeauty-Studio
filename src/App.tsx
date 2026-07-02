@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import EditorWorkspace from './components/EditorWorkspace';
 import ExportModal from './components/ExportModal';
 import ProfileSettingsModal from './components/ProfileSettingsModal';
+import IdeasBoard from './components/IdeasBoard';
 
 const MainApp: React.FC = () => {
   const { currentView, showExportModal, showProfileSettings } = useApp();
@@ -21,6 +22,7 @@ const MainApp: React.FC = () => {
         {currentView === 'auth' && <AuthScreen />}
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'editor' && <EditorWorkspace />}
+        {currentView === 'ideas' && <IdeasBoard />}
       </div>
 
       {/* Global Modals */}
